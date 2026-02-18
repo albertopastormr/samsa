@@ -47,18 +47,30 @@ func handleConn(conn net.Conn) {
 			return
 		}
 
-		// 3. Extract correlation_id (request_api_key: 2, request_api_version: 2, correlation_id: 4)
-		// It starts at offset 4 of the request payload (after size field)
+		// 3. Extract header fields
+		// request_api_key: offset 0 (2 bytes)
+		// request_api_version: offset 2 (2 bytes)
+		// correlation_id: offset 4 (4 bytes)
 		if len(requestBuf) < 8 {
-			fmt.Println("Request too small to contain correlation_id")
+			fmt.Println("Request too small to contain header")
 			return
 		}
+
+		apiVersion := int16(binary.BigEndian.Uint16(requestBuf[2:4]))
 		correlationID := binary.BigEndian.Uint32(requestBuf[4:8])
 
-		// 4. Send 8-byte response: 4 bytes message_size + 4 bytes correlation_id
-		resp := make([]byte, 8)
+		// 4. Determine error_code
+		// For ApiVersions (assumed API key 18), we support versions 0-4.
+		var errorCode int16 = 0
+		if apiVersion < 0 || apiVersion > 4 {
+			errorCode = 35 // UNSUPPORTED_VERSION
+		}
+
+		// 5. Send response: 4 bytes message_size + 4 bytes correlation_id + 2 bytes error_code
+		resp := make([]byte, 10)
 		binary.BigEndian.PutUint32(resp[0:4], 0)             // message_size: 0
 		binary.BigEndian.PutUint32(resp[4:8], correlationID) // echoed correlation_id
+		binary.BigEndian.PutUint16(resp[8:10], uint16(errorCode))
 
 		if _, err := conn.Write(resp); err != nil {
 			fmt.Printf("Error writing response: %v\n", err)
