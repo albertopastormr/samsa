@@ -66,11 +66,36 @@ func handleConn(conn net.Conn) {
 			errorCode = 35 // UNSUPPORTED_VERSION
 		}
 
-		// 5. Send response: 4 bytes message_size + 4 bytes correlation_id + 2 bytes error_code
-		resp := make([]byte, 10)
-		binary.BigEndian.PutUint32(resp[0:4], 0)             // message_size: 0
-		binary.BigEndian.PutUint32(resp[4:8], correlationID) // echoed correlation_id
+		// 5. Construct Response Body (v4)
+		// Header (Response Header v0): correlation_id (4 bytes)
+		// Body:
+		//   error_code (INT16) - 2 bytes
+		//   api_keys length (COMPACT_ARRAY) - VARINT (1 byte for small arrays)
+		//   api_key 18 entry:
+		//     api_key (INT16) - 2 bytes
+		//     min_version (INT16) - 2 bytes
+		//     max_version (INT16) - 2 bytes
+		//     TAG_BUFFER - 1 byte
+		//   throttle_time_ms (INT32) - 4 bytes
+		//   TAG_BUFFER - 1 byte
+		// Total: 4 (header) + 2 + 1 + 7 + 4 + 1 = 19 bytes payload
+
+		resp := make([]byte, 4+19)                           // 4 for size + 19 for payload
+		binary.BigEndian.PutUint32(resp[0:4], 19)            // message_size (header + body)
+		binary.BigEndian.PutUint32(resp[4:8], correlationID) // correlation_id
+
+		// Body starts at offset 8
 		binary.BigEndian.PutUint16(resp[8:10], uint16(errorCode))
+		resp[10] = 2 // api_keys array length (1 element + 1 for compact array)
+
+		// Entry for API 18 (ApiVersions)
+		binary.BigEndian.PutUint16(resp[11:13], 18) // api_key
+		binary.BigEndian.PutUint16(resp[13:15], 0)  // min_version
+		binary.BigEndian.PutUint16(resp[15:17], 4)  // max_version
+		resp[17] = 0                                // Entry Tag Buffer
+
+		binary.BigEndian.PutUint32(resp[18:22], 0) // throttle_time_ms
+		resp[22] = 0                               // Main Tag Buffer
 
 		if _, err := conn.Write(resp); err != nil {
 			fmt.Printf("Error writing response: %v\n", err)
