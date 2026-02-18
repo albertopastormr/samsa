@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 	"os"
 )
@@ -19,23 +20,49 @@ func main() {
 		conn, err := l.Accept()
 		if err != nil {
 			fmt.Println("Error accepting connection:", err.Error())
-			os.Exit(1)
+			continue
 		}
 		go handleConn(conn)
 	}
 }
 
-// handleConn handles a single client connection.
-// It sends an 8-byte response: 4 bytes message_size (0) + 4 bytes correlation_id (7).
 func handleConn(conn net.Conn) {
 	defer conn.Close()
 
-	// Build the 8-byte response using direct big-endian encoding (no reflection).
-	var buf [8]byte
-	binary.BigEndian.PutUint32(buf[0:4], 0) // message_size: 0 (any value works for this stage)
-	binary.BigEndian.PutUint32(buf[4:8], 7) // correlation_id: 7
+	for {
+		// 1. Read message_size (4 bytes)
+		sizeBuf := make([]byte, 4)
+		if _, err := io.ReadFull(conn, sizeBuf); err != nil {
+			if err != io.EOF {
+				fmt.Printf("Error reading message size: %v\n", err)
+			}
+			return
+		}
+		messageSize := int32(binary.BigEndian.Uint32(sizeBuf))
 
-	if _, err := conn.Write(buf[:]); err != nil {
-		fmt.Println("Error writing response:", err.Error())
+		// 2. Read the rest of the message as indicated by messageSize
+		requestBuf := make([]byte, messageSize)
+		if _, err := io.ReadFull(conn, requestBuf); err != nil {
+			fmt.Printf("Error reading request body: %v\n", err)
+			return
+		}
+
+		// 3. Extract correlation_id (request_api_key: 2, request_api_version: 2, correlation_id: 4)
+		// It starts at offset 4 of the request payload (after size field)
+		if len(requestBuf) < 8 {
+			fmt.Println("Request too small to contain correlation_id")
+			return
+		}
+		correlationID := binary.BigEndian.Uint32(requestBuf[4:8])
+
+		// 4. Send 8-byte response: 4 bytes message_size + 4 bytes correlation_id
+		resp := make([]byte, 8)
+		binary.BigEndian.PutUint32(resp[0:4], 0)             // message_size: 0
+		binary.BigEndian.PutUint32(resp[4:8], correlationID) // echoed correlation_id
+
+		if _, err := conn.Write(resp); err != nil {
+			fmt.Printf("Error writing response: %v\n", err)
+			return
+		}
 	}
 }
