@@ -1,3 +1,3 @@
-module github.com/codecrafters-io/kafka-starter-go
+module github.com/albertopastormr/samsa
 
 go 1.25.0
