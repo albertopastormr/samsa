@@ -23,10 +23,10 @@ func TestReader(t *testing.T) {
 }
 
 func TestWriter(t *testing.T) {
-	w := NewWriter(10)
+	w := NewWriter(11)
 	w.WriteInt16(1)
 	w.WriteInt32(2)
-	w.WriteByte(0xFF)
+	w.WriteUint8(0xFF)
 	w.WriteUint32(0x12345678)
 
 	expected := []byte{

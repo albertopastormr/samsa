@@ -58,7 +58,7 @@ func (w *Writer) WriteInt32(v int32) {
 	w.pos += 4
 }
 
-func (w *Writer) WriteByte(b byte) {
+func (w *Writer) WriteUint8(b uint8) {
 	w.buf[w.pos] = b
 	w.pos++
 }

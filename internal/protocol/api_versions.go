@@ -37,16 +37,16 @@ func (resp *ApiVersionsResponse) Write(w *Writer) {
 	w.WriteInt16(resp.ErrorCode)
 
 	// Compact Array length: N+1
-	w.WriteByte(byte(len(resp.ApiKeys) + 1))
+	w.WriteUint8(uint8(len(resp.ApiKeys) + 1))
 	for _, entry := range resp.ApiKeys {
 		w.WriteInt16(entry.ApiKey)
 		w.WriteInt16(entry.MinVersion)
 		w.WriteInt16(entry.MaxVersion)
-		w.WriteByte(0) // Tag Buffer for entry
+		w.WriteUint8(0) // Tag Buffer for entry
 	}
 
 	w.WriteInt32(resp.ThrottleTimeMs)
-	w.WriteByte(0) // Main Tag Buffer
+	w.WriteUint8(0) // Main Tag Buffer
 }
 
 func (resp *ApiVersionsResponse) TotalSize() int {
