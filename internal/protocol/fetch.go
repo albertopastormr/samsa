@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"encoding/binary"
-	"fmt"
 )
 
 type FetchResponse struct {
@@ -60,7 +59,6 @@ type FetchRequestForgottenTopic struct {
 }
 
 func DecodeFetchRequest(r *Reader) FetchRequest {
-	fmt.Printf("Decoding FetchRequest. Buffer size: %d\n", len(r.buf))
 	req := FetchRequest{}
 	_ = r.ReadInt32() // replica_id
 	req.MaxWaitMs = r.ReadInt32()
@@ -74,19 +72,16 @@ func DecodeFetchRequest(r *Reader) FetchRequest {
 	topicCountVar, n := binary.Uvarint(r.buf[r.pos:])
 	r.pos += n
 	topicCount := int(topicCountVar) - 1
-	fmt.Printf("  TopicCount: %d (varint result: %d)\n", topicCount, topicCountVar)
 
 	if topicCount > 0 {
 		req.Topics = make([]FetchRequestTopic, topicCount)
 		for i := 0; i < topicCount; i++ {
 			t := FetchRequestTopic{}
 			r.ReadBytes(t.TopicId[:])
-			fmt.Printf("    Topic[%d] ID: %x\n", i, t.TopicId)
 
 			partCountVar, n := binary.Uvarint(r.buf[r.pos:])
 			r.pos += n
 			partCount := int(partCountVar) - 1
-			fmt.Printf("      PartitionCount: %d\n", partCount)
 
 			t.Partitions = make([]FetchRequestPartition, partCount)
 			for j := 0; j < partCount; j++ {
@@ -109,7 +104,6 @@ func DecodeFetchRequest(r *Reader) FetchRequest {
 	forgottenCountVar, n := binary.Uvarint(r.buf[r.pos:])
 	r.pos += n
 	forgottenCount := int(forgottenCountVar) - 1
-	fmt.Printf("  ForgottenTopicsCount: %d\n", forgottenCount)
 	for i := 0; i < forgottenCount; i++ {
 		r.pos += 16 // TopicId
 		pCountVar, n := binary.Uvarint(r.buf[r.pos:])
@@ -120,14 +114,11 @@ func DecodeFetchRequest(r *Reader) FetchRequest {
 	}
 
 	req.RackId = r.ReadCompactString()
-	fmt.Printf("  RackId: %s\n", req.RackId)
-	// main tag buffer is already handled by remaining or explicitly if needed
+	// main tag buffer
 	if r.pos < len(r.buf) {
-		fmt.Printf("  Main Tag Buffer present at pos %d/%d\n", r.pos, len(r.buf))
 		r.pos++
 	}
 
-	fmt.Printf("  Final pos: %d/%d\n", r.pos, len(r.buf))
 	return req
 }
 
