@@ -67,3 +67,45 @@ func (w *Writer) WriteUint32(v uint32) {
 	binary.BigEndian.PutUint32(w.buf[w.pos:w.pos+4], v)
 	w.pos += 4
 }
+
+func (r *Reader) ReadInt8() int8 {
+	v := int8(r.buf[r.pos])
+	r.pos += 1
+	return v
+}
+
+func (r *Reader) ReadNullableString() *string {
+	length := r.ReadInt16()
+	if length == -1 {
+		return nil
+	}
+	v := string(r.buf[r.pos : r.pos+int(length)])
+	r.pos += int(length)
+	return &v
+}
+
+func (r *Reader) ReadCompactString() string {
+	length := r.ReadInt8() - 1
+	if length <= 0 {
+		return ""
+	}
+	v := string(r.buf[r.pos : r.pos+int(length)])
+	r.pos += int(length)
+	return v
+}
+
+func (w *Writer) WriteInt8(v int8) {
+	w.buf[w.pos] = byte(v)
+	w.pos++
+}
+
+func (w *Writer) WriteCompactString(s string) {
+	w.WriteUint8(uint8(len(s) + 1))
+	copy(w.buf[w.pos:], s)
+	w.pos += len(s)
+}
+
+func (w *Writer) WriteBytes(b []byte) {
+	copy(w.buf[w.pos:], b)
+	w.pos += len(b)
+}

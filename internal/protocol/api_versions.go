@@ -1,27 +1,5 @@
 package protocol
 
-const (
-	ApiKeyVersions                = 18
-	ApiKeyDescribeTopicPartitions = 75
-
-	ErrNone               = 0
-	ErrUnsupportedVersion = 35
-)
-
-type RequestHeader struct {
-	ApiKey        int16
-	ApiVersion    int16
-	CorrelationID int32
-}
-
-func DecodeRequestHeader(r *Reader) RequestHeader {
-	return RequestHeader{
-		ApiKey:        r.ReadInt16(),
-		ApiVersion:    r.ReadInt16(),
-		CorrelationID: r.ReadInt32(),
-	}
-}
-
 type ApiVersionEntry struct {
 	ApiKey     int16
 	MinVersion int16
