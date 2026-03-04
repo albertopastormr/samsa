@@ -9,6 +9,7 @@ type ApiVersionEntry struct {
 var SupportedApis = []ApiVersionEntry{
 	{ApiKey: ApiKeyVersions, MinVersion: 0, MaxVersion: 4},
 	{ApiKey: ApiKeyDescribeTopicPartitions, MinVersion: 0, MaxVersion: 0},
+	{ApiKey: ApiKeyFetch, MinVersion: 0, MaxVersion: 16},
 }
 
 type ApiVersionsResponse struct {
