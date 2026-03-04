@@ -24,6 +24,8 @@ func DecodeRequestHeader(r *Reader) RequestHeader {
 		isHeaderV2 = true
 	} else if req.ApiKey == ApiKeyDescribeTopicPartitions {
 		isHeaderV2 = true
+	} else if req.ApiKey == ApiKeyFetch && req.ApiVersion >= 12 {
+		isHeaderV2 = true
 	}
 
 	if isHeaderV2 && r.Remaining() > 0 {

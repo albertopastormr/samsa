@@ -37,6 +37,7 @@ func NewServer(addr string) *Server {
 func (s *Server) registerHandlers() {
 	s.handlers[protocol.ApiKeyVersions] = handlers.HandleApiVersions
 	s.handlers[protocol.ApiKeyDescribeTopicPartitions] = handlers.HandleDescribeTopicPartitions
+	s.handlers[protocol.ApiKeyFetch] = handlers.HandleFetch
 }
 
 func (s *Server) ListenAndServe() error {
