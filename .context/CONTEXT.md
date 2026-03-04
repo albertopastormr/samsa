@@ -42,7 +42,27 @@ The goal is to build a Kafka-compatible message broker that is **production-read
     * Mock file system interactions using interfaces (`FileSystem`, `File`) to verify logic without touching the actual disk in unit tests.
 * **Linting:** Code must be compliant with `golangci-lint` defaults.
 
-## 5. Specific Directives for the AI
-* When generating struct definitions, verify field sizes against the **Kafka Protocol Guide**.
-* Always prioritize **readability** and **explicit error handling** over clever one-liners.
-* If a solution requires complex concurrency, explain the locking strategy (e.g., "We lock the partition, not the whole broker").
+## 6. Current Implementation Status
+* **Implemented Kafka APIs:**
+    * **ApiVersions (v0-v4):** Handles requests for supported API versions, including `FETCH` (v16) and `DESCRIBE_TOPIC_PARTITIONS` (v0).
+    * **DescribeTopicPartitions (v0):** Retrieves topic and partition metadata by reading the KRaft cluster metadata log from disk. Supports multi-topic queries and alphabetical sorting of results.
+    * **Fetch (v16):** Supports reading message batches from disk. Handles unknown topics, empty topics, and topics with messages by looking up partition log files in the configured `log.dirs`.
+* **Metadata System:**
+    * Implemented a `log_parser` in `internal/metadata` that scans `__cluster_metadata-0` for `TopicRecord` and `PartitionRecord` to build an in-memory view of the cluster state.
+* **Network & Handler Dispatch:**
+    * The server uses a registry-based dispatch system (`internal/network/server.go`) where handlers are pure functions returning an `Encoder`.
+    * Supports both Header V1 and Header V2 depending on the API and version (Flexible versions use V2 for requests and V1 for responses).
+
+## 7. Project Structure
+* `/cmd/server`: Entry point, initializes configuration and starts the TCP server.
+* `/internal/config`: Handles `server.properties` parsing.
+* `/internal/network`: Manages TCP connections and the request-response loop.
+* `/internal/protocol`: Defines Kafka wire protocol packets, binary readers/writers, and compact type handling.
+* `/internal/handlers`: Implementation of Kafka API logic.
+* `/internal/metadata`: Logic for reading and parsing Kafka's internal metadata logs.
+
+## 8. Future Roadmap
+* **Produce API:** Implement the ability to write message batches to disk.
+* **Consumer Groups:** Offset management and heartbeat logic.
+* **Storage Optimization:** Sparse indexing and segment management.
+* **Concurrency Refinement:** Fine-grained locking for partition-level operations.
