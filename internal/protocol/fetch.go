@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"encoding/binary"
+	"fmt"
 )
 
 type FetchResponse struct {
@@ -59,6 +60,9 @@ type FetchRequestForgottenTopic struct {
 }
 
 func DecodeFetchRequest(r *Reader) FetchRequest {
+	blob := r.Buf[r.Pos:]
+	fmt.Printf("DecodeFetchRequest: r.Pos=%d, len(r.Buf)=%d. Hex(20): %x\n", r.Pos, len(r.Buf), blob[:min(20, len(blob))])
+
 	req := FetchRequest{}
 	_ = r.ReadInt32() // replica_id
 	req.MaxWaitMs = r.ReadInt32()
@@ -68,20 +72,25 @@ func DecodeFetchRequest(r *Reader) FetchRequest {
 	req.SessionId = r.ReadInt32()
 	req.SessionEpoch = r.ReadInt32()
 
+	fmt.Printf("  After primitives: r.Pos=%d\n", r.Pos)
+
 	// Topics array (Compact)
 	topicCountVar, n := binary.Uvarint(r.Buf[r.Pos:])
 	r.Pos += n
 	topicCount := int(topicCountVar) - 1
+	fmt.Printf("  TopicCount: %d (n=%d, raw=%d)\n", topicCount, n, topicCountVar)
 
 	if topicCount > 0 {
 		req.Topics = make([]FetchRequestTopic, topicCount)
 		for i := 0; i < topicCount; i++ {
 			t := FetchRequestTopic{}
 			r.ReadBytes(t.TopicId[:])
+			fmt.Printf("    Topic[%d] ID: %x, Pos=%d\n", i, t.TopicId, r.Pos)
 
 			partCountVar, n := binary.Uvarint(r.Buf[r.Pos:])
 			r.Pos += n
 			partCount := int(partCountVar) - 1
+			fmt.Printf("      PartCount: %d (n=%d)\n", partCount, n)
 
 			t.Partitions = make([]FetchRequestPartition, partCount)
 			for j := 0; j < partCount; j++ {
@@ -94,6 +103,7 @@ func DecodeFetchRequest(r *Reader) FetchRequest {
 				p.PartitionMaxBytes = r.ReadInt32()
 				r.Pos += 1 // partition tag buffer
 				t.Partitions[j] = p
+				fmt.Printf("        Part[%d] Pos=%d\n", j, r.Pos)
 			}
 			r.Pos += 1 // topic tag buffer
 			req.Topics[i] = t
@@ -104,6 +114,7 @@ func DecodeFetchRequest(r *Reader) FetchRequest {
 	forgottenCountVar, n := binary.Uvarint(r.Buf[r.Pos:])
 	r.Pos += n
 	forgottenCount := int(forgottenCountVar) - 1
+	fmt.Printf("  ForgottenCount: %d (n=%d)\n", forgottenCount, n)
 	for i := 0; i < forgottenCount; i++ {
 		r.Pos += 16 // TopicId
 		pCountVar, n := binary.Uvarint(r.Buf[r.Pos:])
@@ -114,12 +125,21 @@ func DecodeFetchRequest(r *Reader) FetchRequest {
 	}
 
 	req.RackId = r.ReadCompactString()
+	fmt.Printf("  RackId: %s, Pos=%d\n", req.RackId, r.Pos)
 	// main tag buffer
 	if r.Pos < len(r.Buf) {
 		r.Pos++
 	}
+	fmt.Printf("  Final decode pos: %d/%d\n", r.Pos, len(r.Buf))
 
 	return req
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func (f *FetchResponse) TotalSize() int {
