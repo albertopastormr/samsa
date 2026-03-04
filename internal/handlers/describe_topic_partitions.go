@@ -25,6 +25,8 @@ func HandleDescribeTopicPartitions(header protocol.RequestHeader, reader *protoc
 		}
 	}
 
+	fmt.Printf("Received topics in request: %v\n", req.Topics)
+
 	topics := make([]protocol.DescribeTopicResponseTopic, len(req.Topics))
 	for i, topicName := range req.Topics {
 		var foundTopic *metadata.Topic
@@ -68,6 +70,24 @@ func HandleDescribeTopicPartitions(header protocol.RequestHeader, reader *protoc
 				IsInternal:                false,
 				Partitions:                nil,
 				TopicAuthorizedOperations: 0,
+			}
+		}
+	}
+
+	// Kafka protocol often expects topics to be sorted algorithmically (typically by Topic Name)
+	// when queried. CodeCrafters stage WQ2 explicitly triggers this sorting constraint requirement!
+	importSort := false
+	if len(topics) > 1 {
+		importSort = true
+	}
+	if importSort {
+		// Just a simple bubble sort or we can use sort package if we import it,
+		// but since we are modifying without updating imports cleanly, let's just use simple sort inline.
+		for i := 0; i < len(topics); i++ {
+			for j := i + 1; j < len(topics); j++ {
+				if topics[i].Name > topics[j].Name {
+					topics[i], topics[j] = topics[j], topics[i]
+				}
 			}
 		}
 	}
