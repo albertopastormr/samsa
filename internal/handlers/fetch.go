@@ -5,13 +5,26 @@ import (
 )
 
 func HandleFetch(header protocol.RequestHeader, reader *protocol.Reader) (protocol.Encoder, error) {
-	// For this stage, we don't need to parse the request body.
-	// But we should consume it if we were doing more.
-	// tester sends Fetch (v16) with empty array of topics.
+	req := protocol.DecodeFetchRequest(reader)
 
-	return &protocol.FetchResponse{
+	resp := &protocol.FetchResponse{
 		ThrottleTimeMs: 0,
 		ErrorCode:      0,
-		SessionId:      0,
-	}, nil
+		SessionId:      req.SessionId,
+		Topics:         make([]protocol.FetchResponseTopic, len(req.Topics)),
+	}
+
+	for i, t := range req.Topics {
+		resp.Topics[i] = protocol.FetchResponseTopic{
+			TopicId: t.TopicId,
+			Partitions: []protocol.FetchResponsePartition{
+				{
+					PartitionIndex: 0,
+					ErrorCode:      protocol.ErrUnknownTopicId,
+				},
+			},
+		}
+	}
+
+	return resp, nil
 }

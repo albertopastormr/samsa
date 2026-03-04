@@ -8,4 +8,5 @@ const (
 	ErrNone                    = 0
 	ErrUnknownTopicOrPartition = 3
 	ErrUnsupportedVersion      = 35
+	ErrUnknownTopicId          = 100
 )

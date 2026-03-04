@@ -30,6 +30,23 @@ func (r *Reader) ReadInt32() int32 {
 	return v
 }
 
+func (r *Reader) ReadInt64() int64 {
+	v := int64(binary.BigEndian.Uint64(r.buf[r.pos : r.pos+8]))
+	r.pos += 8
+	return v
+}
+
+func (r *Reader) ReadUint8() uint8 {
+	v := r.buf[r.pos]
+	r.pos += 1
+	return v
+}
+
+func (r *Reader) ReadBytes(b []byte) {
+	copy(b, r.buf[r.pos:r.pos+len(b)])
+	r.pos += len(b)
+}
+
 func (r *Reader) Remaining() int {
 	return len(r.buf) - r.pos
 }
@@ -66,6 +83,11 @@ func (w *Writer) WriteUint8(b uint8) {
 func (w *Writer) WriteUint32(v uint32) {
 	binary.BigEndian.PutUint32(w.buf[w.pos:w.pos+4], v)
 	w.pos += 4
+}
+
+func (w *Writer) WriteInt64(v int64) {
+	binary.BigEndian.PutUint64(w.buf[w.pos:w.pos+8], uint64(v))
+	w.pos += 8
 }
 
 func (r *Reader) ReadInt8() int8 {
