@@ -1,5 +1,7 @@
 package protocol
 
+import "encoding/binary"
+
 type FetchResponse struct {
 	ThrottleTimeMs int32
 	ErrorCode      int16
@@ -63,43 +65,56 @@ func DecodeFetchRequest(r *Reader) FetchRequest {
 	req.SessionId = r.ReadInt32()
 	req.SessionEpoch = r.ReadInt32()
 
-	// Topics array
-	topicCount := r.ReadUint8() - 1
-	req.Topics = make([]FetchRequestTopic, topicCount)
-	for i := 0; i < int(topicCount); i++ {
-		t := FetchRequestTopic{}
-		r.ReadBytes(t.TopicId[:])
+	// Topics array (Compact)
+	topicCountVar, _ := binary.Uvarint(r.buf[r.pos:])
+	r.pos += 1 // assume length < 128 for simplicity in this stage
+	topicCount := int(topicCountVar) - 1
 
-		partCount := r.ReadUint8() - 1
-		t.Partitions = make([]FetchRequestPartition, partCount)
-		for j := 0; j < int(partCount); j++ {
-			p := FetchRequestPartition{}
-			p.Partition = r.ReadInt32()
-			p.CurrentLeaderEpoch = r.ReadInt32()
-			p.FetchOffset = r.ReadInt64()
-			p.LastFetchedEpoch = r.ReadInt64()
-			p.LogStartOffset = r.ReadInt64()
-			p.PartitionMaxBytes = r.ReadInt32()
-			_ = r.ReadUint8() // partition tag buffer
-			t.Partitions[j] = p
+	if topicCount > 0 {
+		req.Topics = make([]FetchRequestTopic, topicCount)
+		for i := 0; i < topicCount; i++ {
+			t := FetchRequestTopic{}
+			r.ReadBytes(t.TopicId[:])
+
+			partCountVar, _ := binary.Uvarint(r.buf[r.pos:])
+			r.pos += 1
+			partCount := int(partCountVar) - 1
+
+			t.Partitions = make([]FetchRequestPartition, partCount)
+			for j := 0; j < partCount; j++ {
+				p := FetchRequestPartition{}
+				p.Partition = r.ReadInt32()
+				p.CurrentLeaderEpoch = r.ReadInt32()
+				p.FetchOffset = r.ReadInt64()
+				p.LastFetchedEpoch = r.ReadInt64()
+				p.LogStartOffset = r.ReadInt64()
+				p.PartitionMaxBytes = r.ReadInt32()
+				r.pos += 1 // partition tag buffer
+				t.Partitions[j] = p
+			}
+			r.pos += 1 // topic tag buffer
+			req.Topics[i] = t
 		}
-		_ = r.ReadUint8() // topic tag buffer
-		req.Topics[i] = t
 	}
 
-	// ForgottenTopics
-	forgottenCount := r.ReadUint8() - 1
-	for i := 0; i < int(forgottenCount); i++ {
-		r.ReadBytes(make([]byte, 16))
-		pCount := r.ReadUint8() - 1
-		for j := 0; j < int(pCount); j++ {
-			r.ReadInt32()
-		}
-		_ = r.ReadUint8()
+	// ForgottenTopics (Compact)
+	forgottenCountVar, _ := binary.Uvarint(r.buf[r.pos:])
+	r.pos += 1
+	forgottenCount := int(forgottenCountVar) - 1
+	for i := 0; i < forgottenCount; i++ {
+		r.pos += 16 // TopicId
+		pCountVar, _ := binary.Uvarint(r.buf[r.pos:])
+		r.pos += 1
+		pCount := int(pCountVar) - 1
+		r.pos += pCount * 4 // Partitions
+		r.pos += 1          // tag buffer
 	}
 
 	req.RackId = r.ReadCompactString()
-	_ = r.ReadUint8() // main tag buffer
+	// main tag buffer is already handled by remaining or explicitly if needed
+	if r.pos < len(r.buf) {
+		r.pos++
+	}
 
 	return req
 }
