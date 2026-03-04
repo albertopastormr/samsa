@@ -124,26 +124,26 @@ func DecodeFetchRequest(r *Reader) FetchRequest {
 }
 
 func (f *FetchResponse) TotalSize() int {
-	size := 4 // Correlation ID
-	size += 1 // Main Tag Buffer
-	size += 4 // ThrottleTimeMs
-	size += 2 // ErrorCode
-	size += 4 // SessionId
-	size += 1 // Responses Compact Array length
+	size := 4                                     // Correlation ID
+	size += 1                                     // Main Tag Buffer
+	size += 4                                     // ThrottleTimeMs
+	size += 2                                     // ErrorCode
+	size += 4                                     // SessionId
+	size += SizeVarint(uint64(len(f.Topics) + 1)) // Responses Compact Array length
 
 	for _, topic := range f.Topics {
-		size += 16 // TopicId
-		size += 1  // Partitions Compact Array length
+		size += 16                                            // TopicId
+		size += SizeVarint(uint64(len(topic.Partitions) + 1)) // Partitions Compact Array length
 		for _, part := range topic.Partitions {
-			size += 4                                 // PartitionIndex
-			size += 2                                 // ErrorCode
-			size += 8                                 // HighWatermark
-			size += 8                                 // LastStableOffset
-			size += 8                                 // LogStartOffset
-			size += 1 + len(part.AbortedTransactions) // AbortedTransactions
-			size += 4                                 // PreferredReadReplica
-			size += 1 + len(part.Records)             // Records size (Compact)
-			size += 1                                 // Tag buffer
+			size += 4                                                           // PartitionIndex
+			size += 2                                                           // ErrorCode
+			size += 8                                                           // HighWatermark
+			size += 8                                                           // LastStableOffset
+			size += 8                                                           // LogStartOffset
+			size += SizeVarint(uint64(1))                                       // AbortedTransactions length (1 for empty)
+			size += 4                                                           // PreferredReadReplica
+			size += SizeVarint(uint64(len(part.Records)+1)) + len(part.Records) // Records size (Compact)
+			size += 1                                                           // Tag buffer
 		}
 		size += 1 // Topic tag buffer
 	}
@@ -161,10 +161,10 @@ func (f *FetchResponse) Encode(w *Writer, correlationID int32) {
 	w.WriteInt32(f.SessionId)
 
 	// Topics
-	w.WriteUint8(uint8(len(f.Topics) + 1))
+	w.WriteVarint(uint64(len(f.Topics) + 1))
 	for _, topic := range f.Topics {
 		w.WriteBytes(topic.TopicId[:])
-		w.WriteUint8(uint8(len(topic.Partitions) + 1))
+		w.WriteVarint(uint64(len(topic.Partitions) + 1))
 		for _, part := range topic.Partitions {
 			w.WriteInt32(part.PartitionIndex)
 			w.WriteInt16(part.ErrorCode)
@@ -173,11 +173,12 @@ func (f *FetchResponse) Encode(w *Writer, correlationID int32) {
 			w.WriteInt64(part.LogStartOffset)
 
 			// AbortedTransactions (Compact Array)
-			w.WriteUint8(1) // Empty
+			w.WriteVarint(1) // Empty
 			w.WriteInt32(part.PreferredReadReplica)
 
 			// Records (Compact Records)
-			w.WriteUint8(1) // Empty
+			w.WriteVarint(uint64(len(part.Records) + 1))
+			w.WriteBytes(part.Records)
 
 			w.WriteUint8(0) // Partition tags
 		}

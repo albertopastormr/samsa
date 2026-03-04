@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/albertopastormr/samsa/internal/config"
 	"github.com/albertopastormr/samsa/internal/metadata"
@@ -27,7 +28,8 @@ func HandleFetch(header protocol.RequestHeader, reader *protocol.Reader) (protoc
 
 	for i, t := range req.Topics {
 		var errCode int16 = protocol.ErrNone
-		if _, exists := metadataTopics[string(t.TopicId[:])]; !exists {
+		topicMetadata, exists := metadataTopics[string(t.TopicId[:])]
+		if !exists {
 			errCode = protocol.ErrUnknownTopicId
 		}
 
@@ -36,13 +38,24 @@ func HandleFetch(header protocol.RequestHeader, reader *protocol.Reader) (protoc
 			Partitions: make([]protocol.FetchResponsePartition, len(t.Partitions)),
 		}
 		for j, p := range t.Partitions {
+			var records []byte
+			if exists {
+				// Path: <log_dir>/<topic_name>-<partition_index>/00000000000000000000.log
+				logPath := fmt.Sprintf("%s/%s-%d/00000000000000000000.log", config.LogDirs, topicMetadata.Name, p.Partition)
+				fileBytes, err := os.ReadFile(logPath)
+				if err == nil {
+					records = fileBytes
+				}
+			}
+
 			resp.Topics[i].Partitions[j] = protocol.FetchResponsePartition{
-				PartitionIndex:   p.Partition,
-				ErrorCode:        errCode,
-				HighWatermark:    0,
-				LastStableOffset: 0,
-				LogStartOffset:   0,
-				Records:          nil,
+				PartitionIndex:       p.Partition,
+				ErrorCode:            errCode,
+				HighWatermark:        0,
+				LastStableOffset:     0,
+				LogStartOffset:       0,
+				PreferredReadReplica: -1,
+				Records:              records,
 			}
 		}
 	}

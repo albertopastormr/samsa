@@ -20,6 +20,18 @@ func (r *Reader) ReadVarint() (uint64, int) {
 	return v, n
 }
 
+func SizeVarint(v uint64) int {
+	if v == 0 {
+		return 1
+	}
+	size := 0
+	for v > 0 {
+		size++
+		v >>= 7
+	}
+	return size
+}
+
 func NewReader(buf []byte) *Reader {
 	return &Reader{Buf: buf, Pos: 0}
 }
