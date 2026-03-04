@@ -204,7 +204,7 @@ func ReadClusterMetadata(filepath string) (map[string]Topic, map[string][]Partit
 
 				fmt.Printf("Parsed Record: FrameVersion=%d, Type=%d, Version=%d\n", frameVersion, recordType, recordVersion)
 
-				if frameVersion == 0 {
+				if frameVersion == 0 || frameVersion == 1 {
 					switch recordType {
 					case 2: // TopicRecord
 						fmt.Printf("Parsing TopicRecord\n")
