@@ -12,12 +12,8 @@ import (
 func HandleFetch(header protocol.RequestHeader, reader *protocol.Reader) (protocol.Encoder, error) {
 	req := protocol.DecodeFetchRequest(reader)
 
-	// Fetch metadata from KRaft log
-	logPath := fmt.Sprintf("%s/__cluster_metadata-0/00000000000000000000.log", config.LogDirs)
-	metadataTopics, _, err := metadata.ReadClusterMetadata(logPath)
-	if err != nil {
-		fmt.Printf("Error reading metadata: %v\n", err)
-	}
+	// Fetch metadata from cached store
+	metadataTopics := metadata.GetTopics()
 
 	resp := &protocol.FetchResponse{
 		ThrottleTimeMs: 0,

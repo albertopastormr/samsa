@@ -3,7 +3,6 @@ package handlers
 import (
 	"fmt"
 
-	"github.com/albertopastormr/samsa/internal/config"
 	"github.com/albertopastormr/samsa/internal/metadata"
 	"github.com/albertopastormr/samsa/internal/protocol"
 )
@@ -12,18 +11,10 @@ func HandleDescribeTopicPartitions(header protocol.RequestHeader, reader *protoc
 	// Parse remainder of body
 	req := protocol.DecodeDescribeTopicPartitionsRequest(reader)
 
-	// Fetch metadata from KRaft log (handled per request for simplicity in this stage)
-	// Codecrafters provides cluster metadata log here, derived from properties configuring `log.dirs`
-	logPath := fmt.Sprintf("%s/__cluster_metadata-0/00000000000000000000.log", config.LogDirs)
-	metadataTopics, metadataPartitions, err := metadata.ReadClusterMetadata(logPath)
-	if err != nil {
-		fmt.Printf("Error reading metadata: %v\n", err)
-	} else {
-		fmt.Printf("Parsed %d topics and %d partitions from %s\n", len(metadataTopics), len(metadataPartitions), logPath)
-		for k, t := range metadataTopics {
-			fmt.Printf("Found topic: Name=%s, UUID=%x\n", t.Name, []byte(k))
-		}
-	}
+	// Fetch metadata from cached store
+	metadataTopics := metadata.GetTopics()
+	metadataPartitions := metadata.GetPartitions()
+	fmt.Printf("Metadata cache: %d topics, %d partition groups\n", len(metadataTopics), len(metadataPartitions))
 
 	fmt.Printf("Received topics in request: %v\n", req.Topics)
 
