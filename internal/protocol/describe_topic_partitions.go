@@ -43,7 +43,7 @@ type DescribeTopicPartitionsResponse struct {
 	NextCursor     int8
 }
 
-func (resp *DescribeTopicPartitionsResponse) Write(w *Writer, correlationID int32) {
+func (resp *DescribeTopicPartitionsResponse) Encode(w *Writer, correlationID int32) {
 	// Header v1
 	w.WriteInt32(correlationID)
 	w.WriteUint8(0) // TAG_BUFFER for header

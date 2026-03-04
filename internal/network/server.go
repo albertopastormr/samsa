@@ -17,12 +17,25 @@ var bufferPool = sync.Pool{
 	},
 }
 
+type HandlerFunc func(header protocol.RequestHeader, reader *protocol.Reader) (protocol.Encoder, error)
+
 type Server struct {
-	addr string
+	addr     string
+	handlers map[int16]HandlerFunc
 }
 
 func NewServer(addr string) *Server {
-	return &Server{addr: addr}
+	s := &Server{
+		addr:     addr,
+		handlers: make(map[int16]HandlerFunc),
+	}
+	s.registerHandlers()
+	return s
+}
+
+func (s *Server) registerHandlers() {
+	s.handlers[protocol.ApiKeyVersions] = handleApiVersions
+	s.handlers[protocol.ApiKeyDescribeTopicPartitions] = handleDescribeTopicPartitions
 }
 
 func (s *Server) ListenAndServe() error {
@@ -68,33 +81,38 @@ func (s *Server) handleConn(conn net.Conn) {
 		header := protocol.DecodeRequestHeader(reader)
 
 		// 4. Handle Request
-		s.dispatch(conn, header, reader)
+		encoder, err := s.dispatch(header, reader)
+		if err != nil {
+			fmt.Printf("Error handling request: %v\n", err)
+			return
+		}
+
+		if encoder != nil {
+			s.sendResponse(conn, encoder, header.CorrelationID)
+		}
 	}
 }
 
-func (s *Server) dispatch(conn net.Conn, header protocol.RequestHeader, reader *protocol.Reader) {
-	switch header.ApiKey {
-	case protocol.ApiKeyVersions:
-		s.handleApiVersions(conn, header, reader)
-	case protocol.ApiKeyDescribeTopicPartitions:
-		s.handleDescribeTopicPartitions(conn, header, reader)
-	default:
-		// Unknown API, for now just close or ignore
-		fmt.Printf("Unknown ApiKey: %d\n", header.ApiKey)
+func (s *Server) dispatch(header protocol.RequestHeader, reader *protocol.Reader) (protocol.Encoder, error) {
+	handler, ok := s.handlers[header.ApiKey]
+	if !ok {
+		return nil, fmt.Errorf("unknown ApiKey: %d", header.ApiKey)
 	}
+	return handler(header, reader)
 }
 
-func (s *Server) sendResponse(conn net.Conn, payloadSize int, writeBody func(*protocol.Writer)) {
+func (s *Server) sendResponse(conn net.Conn, encoder protocol.Encoder, correlationID int32) {
+	payloadSize := encoder.TotalSize()
 	writer := protocol.NewWriter(4 + payloadSize)
 	writer.WriteInt32(int32(payloadSize))
-	writeBody(writer)
+	encoder.Encode(writer, correlationID)
 
 	if _, err := conn.Write(writer.Bytes()); err != nil {
 		fmt.Printf("Error writing response: %v\n", err)
 	}
 }
 
-func (s *Server) handleDescribeTopicPartitions(conn net.Conn, header protocol.RequestHeader, reader *protocol.Reader) {
+func handleDescribeTopicPartitions(header protocol.RequestHeader, reader *protocol.Reader) (protocol.Encoder, error) {
 	// Parse remainder of body
 	req := protocol.DecodeDescribeTopicPartitionsRequest(reader)
 
@@ -109,34 +127,22 @@ func (s *Server) handleDescribeTopicPartitions(conn net.Conn, header protocol.Re
 		}
 	}
 
-	respBody := protocol.DescribeTopicPartitionsResponse{
+	return &protocol.DescribeTopicPartitionsResponse{
 		ThrottleTimeMs: 0,
 		Topics:         topics,
 		NextCursor:     -1,
-	}
-
-	payloadSize := respBody.TotalSize()
-	s.sendResponse(conn, payloadSize, func(w *protocol.Writer) {
-		respBody.Write(w, header.CorrelationID)
-	})
+	}, nil
 }
 
-func (s *Server) handleApiVersions(conn net.Conn, header protocol.RequestHeader, reader *protocol.Reader) {
+func handleApiVersions(header protocol.RequestHeader, reader *protocol.Reader) (protocol.Encoder, error) {
 	errorCode := int16(protocol.ErrNone)
 	if header.ApiVersion < 0 || header.ApiVersion > 4 {
 		errorCode = protocol.ErrUnsupportedVersion
 	}
 
-	respBody := protocol.ApiVersionsResponse{
+	return &protocol.ApiVersionsResponse{
 		ErrorCode:      errorCode,
 		ApiKeys:        protocol.SupportedApis,
 		ThrottleTimeMs: 0,
-	}
-
-	// 4 bytes for correlation_id + body size
-	payloadSize := 4 + respBody.TotalSize()
-	s.sendResponse(conn, payloadSize, func(w *protocol.Writer) {
-		w.WriteInt32(header.CorrelationID)
-		respBody.Write(w)
-	})
+	}, nil
 }

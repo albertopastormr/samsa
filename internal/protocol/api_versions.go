@@ -17,7 +17,8 @@ type ApiVersionsResponse struct {
 	ThrottleTimeMs int32
 }
 
-func (resp *ApiVersionsResponse) Write(w *Writer) {
+func (resp *ApiVersionsResponse) Encode(w *Writer, correlationID int32) {
+	w.WriteInt32(correlationID)
 	w.WriteInt16(resp.ErrorCode)
 
 	// Compact Array length: N+1
@@ -34,7 +35,8 @@ func (resp *ApiVersionsResponse) Write(w *Writer) {
 }
 
 func (resp *ApiVersionsResponse) TotalSize() int {
-	size := SizeInt16                        // errorCode
+	size := 4                                // correlation ID
+	size += SizeInt16                        // errorCode
 	size += 1                                // api_keys array length (compact)
 	size += len(resp.ApiKeys) * (SizeInt16 + // api_key
 		SizeInt16 + // min_version

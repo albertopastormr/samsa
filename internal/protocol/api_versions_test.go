@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestApiVersionsResponse_Write(t *testing.T) {
+func TestApiVersionsResponse_Encode(t *testing.T) {
 	resp := ApiVersionsResponse{
 		ErrorCode:      ErrNone,
 		ApiKeys:        SupportedApis,
@@ -14,10 +14,11 @@ func TestApiVersionsResponse_Write(t *testing.T) {
 
 	size := resp.TotalSize()
 	w := NewWriter(size)
-	resp.Write(w)
+	resp.Encode(w, 0x67890abc)
 
 	got := w.Bytes()
 	expected := []byte{
+		0x67, 0x89, 0x0a, 0xbc, // Correlation ID
 		0x00, 0x00, // ErrorCode
 		0x03,                                     // Compact Array Length (2 entries + 1)
 		0x00, 0x12, 0x00, 0x00, 0x00, 0x04, 0x00, // ApiKey 18, v0-4, tag
