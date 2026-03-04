@@ -81,7 +81,6 @@ func (s *Server) handleConn(conn net.Conn) {
 		// 3. Parse Header
 		reader := protocol.NewReader(requestBuf)
 		header := protocol.DecodeRequestHeader(reader)
-		fmt.Printf("Received request: ApiKey=%d, ApiVersion=%d, CorrelationID=%d\n", header.ApiKey, header.ApiVersion, header.CorrelationID)
 
 		// 4. Handle Request
 		encoder, err := s.dispatch(header, reader)

@@ -1,9 +1,5 @@
 package protocol
 
-import (
-	"encoding/binary"
-)
-
 type FetchResponse struct {
 	ThrottleTimeMs int32
 	ErrorCode      int16
@@ -48,7 +44,7 @@ type FetchRequestPartition struct {
 	Partition          int32
 	CurrentLeaderEpoch int32
 	FetchOffset        int64
-	LastFetchedEpoch   int64
+	LastFetchedEpoch   int32
 	LogStartOffset     int64
 	PartitionMaxBytes  int32
 }
@@ -68,8 +64,7 @@ func DecodeFetchRequest(r *Reader) FetchRequest {
 	req.SessionEpoch = r.ReadInt32()
 
 	// Topics array (Compact)
-	topicCountVar, n := binary.Uvarint(r.Buf[r.Pos:])
-	r.Pos += n
+	topicCountVar, _ := r.ReadVarint()
 	topicCount := int(topicCountVar) - 1
 
 	if topicCount > 0 {
@@ -78,8 +73,7 @@ func DecodeFetchRequest(r *Reader) FetchRequest {
 			t := FetchRequestTopic{}
 			r.ReadBytes(t.TopicId[:])
 
-			partCountVar, n := binary.Uvarint(r.Buf[r.Pos:])
-			r.Pos += n
+			partCountVar, _ := r.ReadVarint()
 			partCount := int(partCountVar) - 1
 
 			t.Partitions = make([]FetchRequestPartition, partCount)
@@ -88,7 +82,7 @@ func DecodeFetchRequest(r *Reader) FetchRequest {
 				p.Partition = r.ReadInt32()
 				p.CurrentLeaderEpoch = r.ReadInt32()
 				p.FetchOffset = r.ReadInt64()
-				p.LastFetchedEpoch = r.ReadInt64()
+				p.LastFetchedEpoch = r.ReadInt32()
 				p.LogStartOffset = r.ReadInt64()
 				p.PartitionMaxBytes = r.ReadInt32()
 				r.Pos += 1 // partition tag buffer
@@ -100,16 +94,14 @@ func DecodeFetchRequest(r *Reader) FetchRequest {
 	}
 
 	// ForgottenTopics (Compact)
-	forgottenCountVar, n := binary.Uvarint(r.Buf[r.Pos:])
-	r.Pos += n
+	forgottenCountVar, _ := r.ReadVarint()
 	forgottenCount := int(forgottenCountVar) - 1
 	if forgottenCount > 0 {
 		req.ForgottenTopics = make([]FetchRequestForgottenTopic, forgottenCount)
 		for i := 0; i < forgottenCount; i++ {
 			ft := FetchRequestForgottenTopic{}
 			r.ReadBytes(ft.TopicId[:])
-			pCountVar, n := binary.Uvarint(r.Buf[r.Pos:])
-			r.Pos += n
+			pCountVar, _ := r.ReadVarint()
 			pCount := int(pCountVar) - 1
 			if pCount > 0 {
 				ft.Partitions = make([]int32, pCount)

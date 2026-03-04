@@ -14,6 +14,12 @@ type Reader struct {
 	Pos int
 }
 
+func (r *Reader) ReadVarint() (uint64, int) {
+	v, n := binary.Uvarint(r.Buf[r.Pos:])
+	r.Pos += n
+	return v, n
+}
+
 func NewReader(buf []byte) *Reader {
 	return &Reader{Buf: buf, Pos: 0}
 }
@@ -75,6 +81,11 @@ func (w *Writer) WriteInt32(v int32) {
 	w.Pos += 4
 }
 
+func (w *Writer) WriteVarint(v uint64) {
+	n := binary.PutUvarint(w.Buf[w.Pos:], v)
+	w.Pos += n
+}
+
 func (w *Writer) WriteUint8(b uint8) {
 	w.Buf[w.Pos] = b
 	w.Pos++
@@ -107,12 +118,13 @@ func (r *Reader) ReadNullableString() *string {
 }
 
 func (r *Reader) ReadCompactString() string {
-	length := r.ReadInt8() - 1
+	lengthVar, _ := r.ReadVarint()
+	length := int(lengthVar) - 1
 	if length <= 0 {
 		return ""
 	}
-	v := string(r.Buf[r.Pos : r.Pos+int(length)])
-	r.Pos += int(length)
+	v := string(r.Buf[r.Pos : r.Pos+length])
+	r.Pos += length
 	return v
 }
 
@@ -122,7 +134,7 @@ func (w *Writer) WriteInt8(v int8) {
 }
 
 func (w *Writer) WriteCompactString(s string) {
-	w.WriteUint8(uint8(len(s) + 1))
+	w.WriteVarint(uint64(len(s) + 1))
 	copy(w.Buf[w.Pos:], s)
 	w.Pos += len(s)
 }
