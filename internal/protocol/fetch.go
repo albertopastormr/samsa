@@ -62,6 +62,7 @@ type FetchRequestForgottenTopic struct {
 func DecodeFetchRequest(r *Reader) FetchRequest {
 	fmt.Printf("Decoding FetchRequest. Buffer size: %d\n", len(r.buf))
 	req := FetchRequest{}
+	_ = r.ReadInt32() // replica_id
 	req.MaxWaitMs = r.ReadInt32()
 	req.MinBytes = r.ReadInt32()
 	req.MaxBytes = r.ReadInt32()
