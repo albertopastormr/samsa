@@ -7,6 +7,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/albertopastormr/samsa/internal/handlers"
 	"github.com/albertopastormr/samsa/internal/protocol"
 )
 
@@ -34,8 +35,8 @@ func NewServer(addr string) *Server {
 }
 
 func (s *Server) registerHandlers() {
-	s.handlers[protocol.ApiKeyVersions] = handleApiVersions
-	s.handlers[protocol.ApiKeyDescribeTopicPartitions] = handleDescribeTopicPartitions
+	s.handlers[protocol.ApiKeyVersions] = handlers.HandleApiVersions
+	s.handlers[protocol.ApiKeyDescribeTopicPartitions] = handlers.HandleDescribeTopicPartitions
 }
 
 func (s *Server) ListenAndServe() error {
@@ -110,39 +111,4 @@ func (s *Server) sendResponse(conn net.Conn, encoder protocol.Encoder, correlati
 	if _, err := conn.Write(writer.Bytes()); err != nil {
 		fmt.Printf("Error writing response: %v\n", err)
 	}
-}
-
-func handleDescribeTopicPartitions(header protocol.RequestHeader, reader *protocol.Reader) (protocol.Encoder, error) {
-	// Parse remainder of body
-	req := protocol.DecodeDescribeTopicPartitionsRequest(reader)
-
-	topics := make([]protocol.DescribeTopicResponseTopic, len(req.Topics))
-	for i, topicName := range req.Topics {
-		topics[i] = protocol.DescribeTopicResponseTopic{
-			ErrorCode:                 protocol.ErrUnknownTopicOrPartition,
-			Name:                      topicName,
-			TopicId:                   [16]byte{},
-			IsInternal:                false,
-			TopicAuthorizedOperations: 0,
-		}
-	}
-
-	return &protocol.DescribeTopicPartitionsResponse{
-		ThrottleTimeMs: 0,
-		Topics:         topics,
-		NextCursor:     -1,
-	}, nil
-}
-
-func handleApiVersions(header protocol.RequestHeader, reader *protocol.Reader) (protocol.Encoder, error) {
-	errorCode := int16(protocol.ErrNone)
-	if header.ApiVersion < 0 || header.ApiVersion > 4 {
-		errorCode = protocol.ErrUnsupportedVersion
-	}
-
-	return &protocol.ApiVersionsResponse{
-		ErrorCode:      errorCode,
-		ApiKeys:        protocol.SupportedApis,
-		ThrottleTimeMs: 0,
-	}, nil
 }

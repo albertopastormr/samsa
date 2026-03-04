@@ -29,11 +29,21 @@ func DecodeDescribeTopicPartitionsRequest(r *Reader) DescribeTopicPartitionsRequ
 	return req
 }
 
+type DescribeTopicResponsePartition struct {
+	ErrorCode    int16
+	PartitionId  int32
+	Leader       int32
+	LeaderEpoch  int32
+	ReplicaNodes []int32
+	IsrNodes     []int32
+}
+
 type DescribeTopicResponseTopic struct {
 	ErrorCode                 int16
 	Name                      string
 	TopicId                   [16]byte
 	IsInternal                bool
+	Partitions                []DescribeTopicResponsePartition
 	TopicAuthorizedOperations int32
 }
 
@@ -62,8 +72,35 @@ func (resp *DescribeTopicPartitionsResponse) Encode(w *Writer, correlationID int
 		} else {
 			w.WriteInt8(0)
 		}
-		// Empty partitions array (Compact array = 1 byte for null/empty = length 1 -> size 0)
-		w.WriteUint8(1)
+		// Partitions array (Compact)
+		w.WriteUint8(uint8(len(topic.Partitions) + 1))
+		for _, p := range topic.Partitions {
+			w.WriteInt16(p.ErrorCode)
+			w.WriteInt32(p.PartitionId)
+			w.WriteInt32(p.Leader)
+			w.WriteInt32(p.LeaderEpoch)
+
+			// ReplicaNodes (Compact Array)
+			w.WriteUint8(uint8(len(p.ReplicaNodes) + 1))
+			for _, r := range p.ReplicaNodes {
+				w.WriteInt32(r)
+			}
+
+			// IsrNodes (Compact Array)
+			w.WriteUint8(uint8(len(p.IsrNodes) + 1))
+			for _, isr := range p.IsrNodes {
+				w.WriteInt32(isr)
+			}
+
+			// EligibleLeaderReplicas (Compact Array, empty)
+			w.WriteUint8(1)
+			// LastKnownElr (Compact Array, empty)
+			w.WriteUint8(1)
+			// OfflineReplicas (Compact Array, empty)
+			w.WriteUint8(1)
+
+			w.WriteUint8(0) // TAG_BUFFER for partition
+		}
 		w.WriteInt32(topic.TopicAuthorizedOperations)
 		w.WriteUint8(0) // TAG_BUFFER for topic
 	}
@@ -82,8 +119,18 @@ func (resp *DescribeTopicPartitionsResponse) TotalSize() int {
 		size += 16                  // TopicId
 		size += 1                   // IsInternal
 		size += 1                   // Partitions array length
-		size += 4                   // TopicAuthorizedOperations
-		size += 1                   // TAG_BUFFER
+		for _, p := range topic.Partitions {
+			size += 2                         // ErrorCode
+			size += 4                         // PartitionId
+			size += 4                         // Leader
+			size += 4                         // LeaderEpoch
+			size += 1 + len(p.ReplicaNodes)*4 // ReplicaNodes
+			size += 1 + len(p.IsrNodes)*4     // IsrNodes
+			size += 1 + 1 + 1                 // Eligible, LastKnown, Offline
+			size += 1                         // TAG_BUFFER
+		}
+		size += 4 // TopicAuthorizedOperations
+		size += 1 // TAG_BUFFER
 	}
 	size += 1 // NextCursor
 	size += 1 // TAG_BUFFER for main response
