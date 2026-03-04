@@ -7,10 +7,8 @@ import (
 
 func TestApiVersionsResponse_Write(t *testing.T) {
 	resp := ApiVersionsResponse{
-		ErrorCode: ErrNone,
-		ApiKeys: []ApiVersionEntry{
-			{ApiKey: ApiKeyVersions, MinVersion: 0, MaxVersion: 4},
-		},
+		ErrorCode:      ErrNone,
+		ApiKeys:        SupportedApis,
 		ThrottleTimeMs: 0,
 	}
 
@@ -19,13 +17,11 @@ func TestApiVersionsResponse_Write(t *testing.T) {
 	resp.Write(w)
 
 	got := w.Bytes()
-	// Expected body (v4):
-	// errorCode(2) + arrayLen(1) + [key(2)+min(2)+max(2)+tag(1)] + throttle(4) + tag(1)
-	// 0000          02            0012   0000   0004   00         00000000    00
 	expected := []byte{
 		0x00, 0x00, // ErrorCode
-		0x02,                                     // Compact Array Length (1 entry + 1)
+		0x03,                                     // Compact Array Length (2 entries + 1)
 		0x00, 0x12, 0x00, 0x00, 0x00, 0x04, 0x00, // ApiKey 18, v0-4, tag
+		0x00, 0x4B, 0x00, 0x00, 0x00, 0x00, 0x00, // ApiKey 75, v0-0, tag
 		0x00, 0x00, 0x00, 0x00, // ThrottleTimeMs
 		0x00, // Main Tag Buffer
 	}

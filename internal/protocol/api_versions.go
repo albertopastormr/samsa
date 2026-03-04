@@ -1,7 +1,8 @@
 package protocol
 
 const (
-	ApiKeyVersions = 18
+	ApiKeyVersions                = 18
+	ApiKeyDescribeTopicPartitions = 75
 
 	ErrNone               = 0
 	ErrUnsupportedVersion = 35
@@ -25,6 +26,11 @@ type ApiVersionEntry struct {
 	ApiKey     int16
 	MinVersion int16
 	MaxVersion int16
+}
+
+var SupportedApis = []ApiVersionEntry{
+	{ApiKey: ApiKeyVersions, MinVersion: 0, MaxVersion: 4},
+	{ApiKey: ApiKeyDescribeTopicPartitions, MinVersion: 0, MaxVersion: 0},
 }
 
 type ApiVersionsResponse struct {

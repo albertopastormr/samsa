@@ -89,10 +89,8 @@ func (s *Server) handleApiVersions(conn net.Conn, header protocol.RequestHeader)
 	}
 
 	respBody := protocol.ApiVersionsResponse{
-		ErrorCode: errorCode,
-		ApiKeys: []protocol.ApiVersionEntry{
-			{ApiKey: protocol.ApiKeyVersions, MinVersion: 0, MaxVersion: 4},
-		},
+		ErrorCode:      errorCode,
+		ApiKeys:        protocol.SupportedApis,
 		ThrottleTimeMs: 0,
 	}
 
