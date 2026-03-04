@@ -10,89 +10,89 @@ const (
 )
 
 type Reader struct {
-	buf []byte
-	pos int
+	Buf []byte
+	Pos int
 }
 
 func NewReader(buf []byte) *Reader {
-	return &Reader{buf: buf, pos: 0}
+	return &Reader{Buf: buf, Pos: 0}
 }
 
 func (r *Reader) ReadInt16() int16 {
-	v := int16(binary.BigEndian.Uint16(r.buf[r.pos : r.pos+2]))
-	r.pos += 2
+	v := int16(binary.BigEndian.Uint16(r.Buf[r.Pos : r.Pos+2]))
+	r.Pos += 2
 	return v
 }
 
 func (r *Reader) ReadInt32() int32 {
-	v := int32(binary.BigEndian.Uint32(r.buf[r.pos : r.pos+4]))
-	r.pos += 4
+	v := int32(binary.BigEndian.Uint32(r.Buf[r.Pos : r.Pos+4]))
+	r.Pos += 4
 	return v
 }
 
 func (r *Reader) ReadInt64() int64 {
-	v := int64(binary.BigEndian.Uint64(r.buf[r.pos : r.pos+8]))
-	r.pos += 8
+	v := int64(binary.BigEndian.Uint64(r.Buf[r.Pos : r.Pos+8]))
+	r.Pos += 8
 	return v
 }
 
 func (r *Reader) ReadUint8() uint8 {
-	v := r.buf[r.pos]
-	r.pos += 1
+	v := r.Buf[r.Pos]
+	r.Pos += 1
 	return v
 }
 
 func (r *Reader) ReadBytes(b []byte) {
-	copy(b, r.buf[r.pos:r.pos+len(b)])
-	r.pos += len(b)
+	copy(b, r.Buf[r.Pos:r.Pos+len(b)])
+	r.Pos += len(b)
 }
 
 func (r *Reader) Remaining() int {
-	return len(r.buf) - r.pos
+	return len(r.Buf) - r.Pos
 }
 
 // Writer provides primitives to write Kafka wire protocol types without reflection.
 type Writer struct {
-	buf []byte
-	pos int
+	Buf []byte
+	Pos int
 }
 
 func NewWriter(size int) *Writer {
-	return &Writer{buf: make([]byte, size), pos: 0}
+	return &Writer{Buf: make([]byte, size), Pos: 0}
 }
 
 func (w *Writer) Bytes() []byte {
-	return w.buf[:w.pos]
+	return w.Buf[:w.Pos]
 }
 
 func (w *Writer) WriteInt16(v int16) {
-	binary.BigEndian.PutUint16(w.buf[w.pos:w.pos+2], uint16(v))
-	w.pos += 2
+	binary.BigEndian.PutUint16(w.Buf[w.Pos:w.Pos+2], uint16(v))
+	w.Pos += 2
 }
 
 func (w *Writer) WriteInt32(v int32) {
-	binary.BigEndian.PutUint32(w.buf[w.pos:w.pos+4], uint32(v))
-	w.pos += 4
+	binary.BigEndian.PutUint32(w.Buf[w.Pos:w.Pos+4], uint32(v))
+	w.Pos += 4
 }
 
 func (w *Writer) WriteUint8(b uint8) {
-	w.buf[w.pos] = b
-	w.pos++
+	w.Buf[w.Pos] = b
+	w.Pos++
 }
 
 func (w *Writer) WriteUint32(v uint32) {
-	binary.BigEndian.PutUint32(w.buf[w.pos:w.pos+4], v)
-	w.pos += 4
+	binary.BigEndian.PutUint32(w.Buf[w.Pos:w.Pos+4], v)
+	w.Pos += 4
 }
 
 func (w *Writer) WriteInt64(v int64) {
-	binary.BigEndian.PutUint64(w.buf[w.pos:w.pos+8], uint64(v))
-	w.pos += 8
+	binary.BigEndian.PutUint64(w.Buf[w.Pos:w.Pos+8], uint64(v))
+	w.Pos += 8
 }
 
 func (r *Reader) ReadInt8() int8 {
-	v := int8(r.buf[r.pos])
-	r.pos += 1
+	v := int8(r.Buf[r.Pos])
+	r.Pos += 1
 	return v
 }
 
@@ -101,8 +101,8 @@ func (r *Reader) ReadNullableString() *string {
 	if length == -1 {
 		return nil
 	}
-	v := string(r.buf[r.pos : r.pos+int(length)])
-	r.pos += int(length)
+	v := string(r.Buf[r.Pos : r.Pos+int(length)])
+	r.Pos += int(length)
 	return &v
 }
 
@@ -111,23 +111,23 @@ func (r *Reader) ReadCompactString() string {
 	if length <= 0 {
 		return ""
 	}
-	v := string(r.buf[r.pos : r.pos+int(length)])
-	r.pos += int(length)
+	v := string(r.Buf[r.Pos : r.Pos+int(length)])
+	r.Pos += int(length)
 	return v
 }
 
 func (w *Writer) WriteInt8(v int8) {
-	w.buf[w.pos] = byte(v)
-	w.pos++
+	w.Buf[w.Pos] = byte(v)
+	w.Pos++
 }
 
 func (w *Writer) WriteCompactString(s string) {
 	w.WriteUint8(uint8(len(s) + 1))
-	copy(w.buf[w.pos:], s)
-	w.pos += len(s)
+	copy(w.Buf[w.Pos:], s)
+	w.Pos += len(s)
 }
 
 func (w *Writer) WriteBytes(b []byte) {
-	copy(w.buf[w.pos:], b)
-	w.pos += len(b)
+	copy(w.Buf[w.Pos:], b)
+	w.Pos += len(b)
 }

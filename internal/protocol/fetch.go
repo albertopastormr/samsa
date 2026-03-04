@@ -69,8 +69,8 @@ func DecodeFetchRequest(r *Reader) FetchRequest {
 	req.SessionEpoch = r.ReadInt32()
 
 	// Topics array (Compact)
-	topicCountVar, n := binary.Uvarint(r.buf[r.pos:])
-	r.pos += n
+	topicCountVar, n := binary.Uvarint(r.Buf[r.Pos:])
+	r.Pos += n
 	topicCount := int(topicCountVar) - 1
 
 	if topicCount > 0 {
@@ -79,8 +79,8 @@ func DecodeFetchRequest(r *Reader) FetchRequest {
 			t := FetchRequestTopic{}
 			r.ReadBytes(t.TopicId[:])
 
-			partCountVar, n := binary.Uvarint(r.buf[r.pos:])
-			r.pos += n
+			partCountVar, n := binary.Uvarint(r.Buf[r.Pos:])
+			r.Pos += n
 			partCount := int(partCountVar) - 1
 
 			t.Partitions = make([]FetchRequestPartition, partCount)
@@ -92,31 +92,31 @@ func DecodeFetchRequest(r *Reader) FetchRequest {
 				p.LastFetchedEpoch = r.ReadInt64()
 				p.LogStartOffset = r.ReadInt64()
 				p.PartitionMaxBytes = r.ReadInt32()
-				r.pos += 1 // partition tag buffer
+				r.Pos += 1 // partition tag buffer
 				t.Partitions[j] = p
 			}
-			r.pos += 1 // topic tag buffer
+			r.Pos += 1 // topic tag buffer
 			req.Topics[i] = t
 		}
 	}
 
 	// ForgottenTopics (Compact)
-	forgottenCountVar, n := binary.Uvarint(r.buf[r.pos:])
-	r.pos += n
+	forgottenCountVar, n := binary.Uvarint(r.Buf[r.Pos:])
+	r.Pos += n
 	forgottenCount := int(forgottenCountVar) - 1
 	for i := 0; i < forgottenCount; i++ {
-		r.pos += 16 // TopicId
-		pCountVar, n := binary.Uvarint(r.buf[r.pos:])
-		r.pos += n
+		r.Pos += 16 // TopicId
+		pCountVar, n := binary.Uvarint(r.Buf[r.Pos:])
+		r.Pos += n
 		pCount := int(pCountVar) - 1
-		r.pos += pCount * 4 // Partitions
-		r.pos += 1          // tag buffer
+		r.Pos += pCount * 4 // Partitions
+		r.Pos += 1          // tag buffer
 	}
 
 	req.RackId = r.ReadCompactString()
 	// main tag buffer
-	if r.pos < len(r.buf) {
-		r.pos++
+	if r.Pos < len(r.Buf) {
+		r.Pos++
 	}
 
 	return req
