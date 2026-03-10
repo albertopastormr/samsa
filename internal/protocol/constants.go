@@ -1,6 +1,7 @@
 package protocol
 
 const (
+	ApiKeyProduce                 = 0
 	ApiKeyFetch                   = 1
 	ApiKeyVersions                = 18
 	ApiKeyDescribeTopicPartitions = 75
