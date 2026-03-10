@@ -9,15 +9,17 @@ import (
 )
 
 type Store struct {
-	mu         sync.RWMutex
-	topics     map[string]Topic
-	partitions map[string][]Partition
-	lastUpdate time.Time
+	mu           sync.RWMutex
+	topics       map[string]Topic
+	topicsByName map[string]string // Maps Topic Name to UUID
+	partitions   map[string][]Partition
+	lastUpdate   time.Time
 }
 
 var globalStore = &Store{
-	topics:     make(map[string]Topic),
-	partitions: make(map[string][]Partition),
+	topics:       make(map[string]Topic),
+	topicsByName: make(map[string]string),
+	partitions:   make(map[string][]Partition),
 }
 
 func GetTopics() map[string]Topic {
@@ -32,6 +34,19 @@ func GetPartitions() map[string][]Partition {
 	globalStore.mu.RLock()
 	defer globalStore.mu.RUnlock()
 	return globalStore.partitions
+}
+
+func GetTopicByName(name string) (Topic, bool) {
+	syncIfNecessary()
+	globalStore.mu.RLock()
+	defer globalStore.mu.RUnlock()
+
+	uuid, ok := globalStore.topicsByName[name]
+	if !ok {
+		return Topic{}, false
+	}
+	topic, ok := globalStore.topics[uuid]
+	return topic, ok
 }
 
 func syncIfNecessary() {
@@ -60,5 +75,9 @@ func syncIfNecessary() {
 
 	globalStore.topics = topics
 	globalStore.partitions = partitions
+	globalStore.topicsByName = make(map[string]string)
+	for uuid, topic := range topics {
+		globalStore.topicsByName[topic.Name] = uuid
+	}
 	globalStore.lastUpdate = time.Now()
 }
