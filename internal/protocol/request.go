@@ -26,10 +26,12 @@ func DecodeRequestHeader(r *Reader) RequestHeader {
 		isHeaderV2 = true
 	} else if req.ApiKey == ApiKeyFetch && req.ApiVersion >= 12 {
 		isHeaderV2 = true
+	} else if req.ApiKey == ApiKeyProduce && req.ApiVersion >= 9 {
+		isHeaderV2 = true
 	}
 
 	if isHeaderV2 && r.Remaining() > 0 {
-		_ = r.ReadInt8() // TAG_BUFFER
+		r.ReadVarint() // TAG_BUFFER count, usually 0
 	}
 
 	return req
