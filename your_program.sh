@@ -5,11 +5,11 @@
 
 set -e # Exit early if any commands fail
 
-# Build the server binary
+# Build the samsa binary
 (
   cd "$(dirname "$0")"
-  go build -o server_bin cmd/server/*.go
+  go build -o samsa cmd/samsa/main.go
 )
 
-# Run the server binary
-exec ./server_bin "$@"
+# Run the samsa server
+exec ./samsa server "$@"

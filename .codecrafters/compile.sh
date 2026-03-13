@@ -3,4 +3,4 @@
 
 set -e # Exit on failure
 
-go build -o /tmp/codecrafters-build-kafka-go cmd/server/*.go
+go build -o /tmp/codecrafters-build-kafka-go cmd/samsa/main.go

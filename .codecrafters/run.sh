@@ -3,4 +3,4 @@
 
 set -e # Exit on failure
 
-exec /tmp/codecrafters-build-kafka-go "$@"
+exec /tmp/codecrafters-build-kafka-go server "$@"
