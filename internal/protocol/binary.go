@@ -32,6 +32,10 @@ func SizeVarint(v uint64) int {
 	return size
 }
 
+func SizeCompactString(s string) int {
+	return SizeVarint(uint64(len(s)+1)) + len(s)
+}
+
 func NewReader(buf []byte) *Reader {
 	return &Reader{Buf: buf, Pos: 0}
 }

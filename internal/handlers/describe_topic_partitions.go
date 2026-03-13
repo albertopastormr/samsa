@@ -16,10 +16,15 @@ func HandleDescribeTopicPartitions(header protocol.RequestHeader, reader *protoc
 	metadataPartitions := metadata.GetPartitions()
 	fmt.Printf("Metadata cache: %d topics, %d partition groups\n", len(metadataTopics), len(metadataPartitions))
 
-	fmt.Printf("Received topics in request: %v\n", req.Topics)
+	requestedTopics := req.Topics
+	if len(requestedTopics) == 0 {
+		for _, v := range metadataTopics {
+			requestedTopics = append(requestedTopics, v.Name)
+		}
+	}
 
-	topics := make([]protocol.DescribeTopicResponseTopic, len(req.Topics))
-	for i, topicName := range req.Topics {
+	topics := make([]protocol.DescribeTopicResponseTopic, len(requestedTopics))
+	for i, topicName := range requestedTopics {
 		var foundTopic *metadata.Topic
 		// reverse lookup topic by name since ReadClusterMetadata maps UUID -> Topic
 		for _, v := range metadataTopics {

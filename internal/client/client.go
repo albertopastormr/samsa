@@ -101,3 +101,38 @@ func (c *KafkaClient) Produce(topicName string, partition int32, records []byte)
 	resp := protocol.DecodeProduceResponse(reader)
 	return &resp, nil
 }
+func (c *KafkaClient) Fetch(topicID [16]byte, partition int32, offset int64) (*protocol.FetchResponse, error) {
+	cid := c.nextCorrelationID()
+	req := &protocol.FetchRequest{
+		MaxWaitMs:    1000,
+		MinBytes:     1,
+		MaxBytes:     1024 * 1024,
+		SessionId:    0,
+		SessionEpoch: -1,
+		Topics: []protocol.FetchRequestTopic{
+			{
+				TopicId: topicID,
+				Partitions: []protocol.FetchRequestPartition{
+					{
+						Partition:         partition,
+						FetchOffset:       offset,
+						PartitionMaxBytes: 1024 * 1024,
+					},
+				},
+			},
+		},
+	}
+
+	err := c.networkClient.SendRequest(protocol.ApiKeyFetch, 16, cid, nil, req)
+	if err != nil {
+		return nil, err
+	}
+
+	reader, err := c.networkClient.ReceiveResponse()
+	if err != nil {
+		return nil, err
+	}
+
+	resp := protocol.DecodeFetchResponse(reader)
+	return &resp, nil
+}

@@ -187,3 +187,128 @@ func (f *FetchResponse) Encode(w *Writer, correlationID int32) {
 
 	w.WriteUint8(0) // Final Tag Buffer
 }
+
+func (f *FetchRequest) TotalSize() int {
+	size := 4 // MaxWaitMs
+	size += 4 // MinBytes
+	size += 4 // MaxBytes
+	size += 1 // IsolationLevel
+	size += 4 // SessionId
+	size += 4 // SessionEpoch
+
+	size += SizeVarint(uint64(len(f.Topics) + 1))
+	for _, topic := range f.Topics {
+		size += 16                                    // TopicId
+		size += SizeVarint(uint64(len(topic.Partitions) + 1))
+		size += len(topic.Partitions) * (4 + 4 + 8 + 4 + 8 + 4 + 1)
+		size += 1 // Topic tag buffer
+	}
+
+	size += SizeVarint(uint64(len(f.ForgottenTopics) + 1))
+	for _, ft := range f.ForgottenTopics {
+		size += 16 // TopicId
+		size += SizeVarint(uint64(len(ft.Partitions) + 1))
+		size += len(ft.Partitions) * 4 // Partitions
+		size += 1                      // Tag buffer
+	}
+
+	size += SizeCompactString(f.RackId)
+	size += 1 // Tag buffer
+	return size
+}
+
+func (f *FetchRequest) Encode(w *Writer) {
+	w.WriteInt32(f.MaxWaitMs)
+	w.WriteInt32(f.MinBytes)
+	w.WriteInt32(f.MaxBytes)
+	w.WriteInt8(f.IsolationLevel)
+	w.WriteInt32(f.SessionId)
+	w.WriteInt32(f.SessionEpoch)
+
+	w.WriteVarint(uint64(len(f.Topics) + 1))
+	for _, topic := range f.Topics {
+		w.WriteBytes(topic.TopicId[:])
+		w.WriteVarint(uint64(len(topic.Partitions) + 1))
+		for _, part := range topic.Partitions {
+			w.WriteInt32(part.Partition)
+			w.WriteInt32(part.CurrentLeaderEpoch)
+			w.WriteInt64(part.FetchOffset)
+			w.WriteInt32(part.LastFetchedEpoch)
+			w.WriteInt64(part.LogStartOffset)
+			w.WriteInt32(part.PartitionMaxBytes)
+			w.WriteUint8(0) // Tag buffer
+		}
+		w.WriteUint8(0) // Tag buffer
+	}
+
+	w.WriteVarint(uint64(len(f.ForgottenTopics) + 1))
+	for _, ft := range f.ForgottenTopics {
+		w.WriteBytes(ft.TopicId[:])
+		w.WriteVarint(uint64(len(ft.Partitions) + 1))
+		for _, p := range ft.Partitions {
+			w.WriteInt32(p)
+		}
+		w.WriteUint8(0) // Tag buffer
+	}
+
+	w.WriteCompactString(f.RackId)
+	w.WriteUint8(0) // Tag buffer
+}
+
+func DecodeFetchResponse(r *Reader) FetchResponse {
+	resp := FetchResponse{}
+	_ = r.ReadInt32() // CorrelationID
+	_ = r.ReadUint8() // Tag Buffer (Response Header V1)
+
+	resp.ThrottleTimeMs = r.ReadInt32()
+	resp.ErrorCode = r.ReadInt16()
+	resp.SessionId = r.ReadInt32()
+
+	topicCountVar, _ := r.ReadVarint()
+	topicCount := int(topicCountVar) - 1
+	if topicCount > 0 {
+		resp.Topics = make([]FetchResponseTopic, topicCount)
+		for i := 0; i < topicCount; i++ {
+			t := FetchResponseTopic{}
+			r.ReadBytes(t.TopicId[:])
+
+			partCountVar, _ := r.ReadVarint()
+			partCount := int(partCountVar) - 1
+			t.Partitions = make([]FetchResponsePartition, partCount)
+			for j := 0; j < partCount; j++ {
+				p := FetchResponsePartition{}
+				p.PartitionIndex = r.ReadInt32()
+				p.ErrorCode = r.ReadInt16()
+				p.HighWatermark = r.ReadInt64()
+				p.LastStableOffset = r.ReadInt64()
+				p.LogStartOffset = r.ReadInt64()
+
+				// AbortedTransactions (Compact Array)
+				abortCountVar, _ := r.ReadVarint()
+				abortCount := int(abortCountVar) - 1
+				if abortCount > 0 {
+					// We don't really support aborted transactions yet, but we must skip them
+					r.Pos += abortCount * (4 + 8) // ProducerId + FirstOffset
+				}
+				// REMOVED: r.Pos += 1 // abort tags
+
+				p.PreferredReadReplica = r.ReadInt32()
+
+				// Records (Compact)
+				recordLenVar, _ := r.ReadVarint()
+				recordLen := int(recordLenVar) - 1
+				if recordLen > 0 {
+					p.Records = make([]byte, recordLen)
+					r.ReadBytes(p.Records)
+				}
+
+				r.Pos += 1 // partition tags
+				t.Partitions[j] = p
+			}
+			r.Pos += 1 // topic tags
+			resp.Topics[i] = t
+		}
+	}
+	r.Pos += 1 // final tag buffer
+	return resp
+}

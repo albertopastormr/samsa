@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/hex"
 	"fmt"
 	"os"
 
@@ -10,7 +11,9 @@ import (
 
 var (
 	topic     string
+	topicID   string
 	partition int32
+	offset    int64
 	message   string
 )
 
@@ -99,6 +102,76 @@ var produceCmd = &cobra.Command{
 	},
 }
 
+var fetchCmd = &cobra.Command{
+	Use:   "fetch",
+	Short: "Fetch records from a topic partition",
+	Run: func(cmd *cobra.Command, args []string) {
+		if topicID == "" {
+			fmt.Println("Error: --topic-id is required (hex format)")
+			cmd.Usage()
+			os.Exit(1)
+		}
+
+		tidBytes, err := hex.DecodeString(topicID)
+		if err != nil || len(tidBytes) != 16 {
+			fmt.Printf("Invalid Topic ID: must be 32 hex characters (16 bytes), got %d chars: %v\n", len(topicID), err)
+			os.Exit(1)
+		}
+		var tid [16]byte
+		copy(tid[:], tidBytes)
+
+		kc, err := client.NewKafkaClient(BrokerAddr)
+		if err != nil {
+			fmt.Printf("Failed to connect: %v\n", err)
+			os.Exit(1)
+		}
+		defer kc.Close()
+
+		resp, err := kc.Fetch(tid, partition, offset)
+		if err != nil {
+			fmt.Printf("Fetch failed: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("ErrorCode: %d\n", resp.ErrorCode)
+		for _, t := range resp.Topics {
+			fmt.Printf("Topic ID: %x\n", t.TopicId)
+			for _, p := range t.Partitions {
+				fmt.Printf("  Partition %d: Error %d, HighWatermark %d\n", p.PartitionIndex, p.ErrorCode, p.HighWatermark)
+				if len(p.Records) > 0 {
+					fmt.Printf("    Records (%d bytes): %s\n", len(p.Records), string(p.Records))
+				}
+			}
+		}
+	},
+}
+
+var topicsCmd = &cobra.Command{
+	Use:   "topics",
+	Short: "List all topics",
+	Run: func(cmd *cobra.Command, args []string) {
+		kc, err := client.NewKafkaClient(BrokerAddr)
+		if err != nil {
+			fmt.Printf("Failed to connect: %v\n", err)
+			os.Exit(1)
+		}
+		defer kc.Close()
+
+		resp, err := kc.DescribeTopicPartitions(nil) // Empty list means "all" in our refactored handler
+		if err != nil {
+			fmt.Printf("Topic listing failed: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("%-20s %-32s %-10s\n", "NAME", "ID", "PARTITIONS")
+		for _, t := range resp.Topics {
+			if t.ErrorCode == 0 {
+				fmt.Printf("%-20s %x %-10d\n", t.Name, t.TopicId, len(t.Partitions))
+			}
+		}
+	},
+}
+
 func init() {
 	metadataCmd.Flags().StringVar(&topic, "topic", "", "Topic name")
 	
@@ -106,7 +179,13 @@ func init() {
 	produceCmd.Flags().Int32Var(&partition, "partition", 0, "Partition index")
 	produceCmd.Flags().StringVar(&message, "message", "", "Message content")
 
+	fetchCmd.Flags().StringVar(&topicID, "topic-id", "", "Topic UUID in hex")
+	fetchCmd.Flags().Int32Var(&partition, "partition", 0, "Partition index")
+	fetchCmd.Flags().Int64Var(&offset, "offset", 0, "Fetch offset")
+
 	rootCmd.AddCommand(apiVersionsCmd)
 	rootCmd.AddCommand(metadataCmd)
 	rootCmd.AddCommand(produceCmd)
+	rootCmd.AddCommand(fetchCmd)
+	rootCmd.AddCommand(topicsCmd)
 }
