@@ -10,13 +10,14 @@ func DecodeDescribeTopicPartitionsRequest(r *Reader) DescribeTopicPartitionsRequ
 	req := DescribeTopicPartitionsRequest{}
 
 	// topics COMPACT_ARRAY
-	topicCount := r.ReadInt8() - 1
+	topicCountVar, _ := r.ReadVarint()
+	topicCount := int(topicCountVar) - 1
 	if topicCount > 0 {
 		req.Topics = make([]string, topicCount)
 		for i := 0; i < int(topicCount); i++ {
 			req.Topics[i] = r.ReadCompactString()
 			// TAG_BUFFER for topic
-			_ = r.ReadInt8()
+			_ = r.ReadUint8()
 		}
 	}
 
@@ -24,9 +25,35 @@ func DecodeDescribeTopicPartitionsRequest(r *Reader) DescribeTopicPartitionsRequ
 	req.Cursor = r.ReadInt8()
 
 	// TAG_BUFFER for main body
-	// _ = r.ReadInt8()
+	_ = r.ReadUint8()
 
 	return req
+}
+
+func (req *DescribeTopicPartitionsRequest) Encode(w *Writer) {
+	// topics COMPACT_ARRAY
+	w.WriteVarint(uint64(len(req.Topics) + 1))
+	for _, topic := range req.Topics {
+		w.WriteCompactString(topic)
+		w.WriteUint8(0) // TAG_BUFFER
+	}
+
+	w.WriteInt32(req.ResponsePartitionLimit)
+	w.WriteInt8(req.Cursor)
+	w.WriteUint8(0) // TAG_BUFFER
+}
+
+func (req *DescribeTopicPartitionsRequest) TotalSize() int {
+	size := 1 // topics array length
+	for _, topic := range req.Topics {
+		size += SizeVarint(uint64(len(topic) + 1))
+		size += len(topic)
+		size += 1 // TAG_BUFFER
+	}
+	size += 4 // ResponsePartitionLimit
+	size += 1 // Cursor
+	size += 1 // TAG_BUFFER
+	return size
 }
 
 type DescribeTopicResponsePartition struct {
@@ -135,4 +162,75 @@ func (resp *DescribeTopicPartitionsResponse) TotalSize() int {
 	size += 1 // NextCursor
 	size += 1 // TAG_BUFFER for main response
 	return size
+}
+
+func DecodeDescribeTopicPartitionsResponse(r *Reader) DescribeTopicPartitionsResponse {
+	resp := DescribeTopicPartitionsResponse{}
+	_ = r.ReadInt32() // CorrelationID
+	_ = r.ReadUint8() // Response Header Tag Buffer
+
+	resp.ThrottleTimeMs = r.ReadInt32()
+
+	// Topics array (Compact)
+	numTopicsVar, _ := r.ReadVarint()
+	numTopics := int(numTopicsVar) - 1
+	if numTopics > 0 {
+		resp.Topics = make([]DescribeTopicResponseTopic, numTopics)
+		for i := 0; i < numTopics; i++ {
+			topic := DescribeTopicResponseTopic{}
+			topic.ErrorCode = r.ReadInt16()
+			topic.Name = r.ReadCompactString()
+			r.ReadBytes(topic.TopicId[:])
+			topic.IsInternal = r.ReadInt8() == 1
+
+			// Partitions (Compact)
+			numPartsVar, _ := r.ReadVarint()
+			numParts := int(numPartsVar) - 1
+			if numParts > 0 {
+				topic.Partitions = make([]DescribeTopicResponsePartition, numParts)
+				for j := 0; j < numParts; j++ {
+					part := DescribeTopicResponsePartition{}
+					part.ErrorCode = r.ReadInt16()
+					part.PartitionId = r.ReadInt32()
+					part.Leader = r.ReadInt32()
+					part.LeaderEpoch = r.ReadInt32()
+
+					// ReplicaNodes
+					numRepsVar, _ := r.ReadVarint()
+					numReps := int(numRepsVar) - 1
+					if numReps > 0 {
+						part.ReplicaNodes = make([]int32, numReps)
+						for k := 0; k < numReps; k++ {
+							part.ReplicaNodes[k] = r.ReadInt32()
+						}
+					}
+
+					// IsrNodes
+					numIsrVar, _ := r.ReadVarint()
+					numIsr := int(numIsrVar) - 1
+					if numIsr > 0 {
+						part.IsrNodes = make([]int32, numIsr)
+						for k := 0; k < numIsr; k++ {
+							part.IsrNodes[k] = r.ReadInt32()
+						}
+					}
+
+					_ = r.ReadUint8() // Eligible (Compact Empty)
+					_ = r.ReadUint8() // LastKnown (Compact Empty)
+					_ = r.ReadUint8() // Offline (Compact Empty)
+					_ = r.ReadUint8() // Tag Buffer
+					topic.Partitions[j] = part
+				}
+			}
+
+			topic.TopicAuthorizedOperations = r.ReadInt32()
+			_ = r.ReadUint8() // Topic Tag Buffer
+			resp.Topics[i] = topic
+		}
+	}
+
+	resp.NextCursor = r.ReadInt8()
+	_ = r.ReadUint8() // Main Tag Buffer
+
+	return resp
 }

@@ -17,6 +17,61 @@ type ProduceRequestPartition struct {
 	Records []byte
 }
 
+func (req *ProduceRequest) Encode(w *Writer) {
+	if req.TransactionalId != nil {
+		w.WriteCompactString(*req.TransactionalId)
+	} else {
+		w.WriteUint8(0)
+	}
+
+	w.WriteInt16(req.Acks)
+	w.WriteInt32(req.TimeoutMs)
+
+	// Topics
+	w.WriteVarint(uint64(len(req.Topics) + 1))
+	for _, topic := range req.Topics {
+		w.WriteCompactString(topic.Name)
+
+		// Partitions
+		w.WriteVarint(uint64(len(topic.Partitions) + 1))
+		for _, part := range topic.Partitions {
+			w.WriteInt32(part.Index)
+			w.WriteVarint(uint64(len(part.Records) + 1))
+			w.WriteBytes(part.Records)
+			w.WriteUint8(0) // Partition Tag Buffer
+		}
+		w.WriteUint8(0) // Topic Tag Buffer
+	}
+	w.WriteUint8(0) // Request Tag Buffer
+}
+
+func (req *ProduceRequest) TotalSize() int {
+	size := 0
+	if req.TransactionalId != nil {
+		size += SizeVarint(uint64(len(*req.TransactionalId) + 1))
+		size += len(*req.TransactionalId)
+	} else {
+		size += 1
+	}
+
+	size += 2 // Acks
+	size += 4 // TimeoutMs
+
+	size += SizeVarint(uint64(len(req.Topics) + 1))
+	for _, topic := range req.Topics {
+		size += SizeVarint(uint64(len(topic.Name) + 1)) + len(topic.Name)
+		size += SizeVarint(uint64(len(topic.Partitions) + 1))
+		for _, part := range topic.Partitions {
+			size += 4 // Index
+			size += SizeVarint(uint64(len(part.Records) + 1)) + len(part.Records)
+			size += 1 // Tag Buffer
+		}
+		size += 1 // Tag Buffer
+	}
+	size += 1 // Tag Buffer
+	return size
+}
+
 type ProduceResponse struct {
 	Responses      []ProduceResponseTopic
 	ThrottleTimeMs int32
@@ -167,4 +222,47 @@ func (resp *ProduceResponse) Encode(w *Writer, correlationID int32) {
 
 	w.WriteInt32(resp.ThrottleTimeMs)
 	w.WriteUint8(0) // Tag Buffer for Response
+}
+
+func DecodeProduceResponse(r *Reader) ProduceResponse {
+	resp := ProduceResponse{}
+	_ = r.ReadInt32() // CorrelationID
+	_ = r.ReadUint8() // Response Header Tag Buffer
+
+	// Topics
+	numTopicsVar, _ := r.ReadVarint()
+	numTopics := int(numTopicsVar) - 1
+	if numTopics > 0 {
+		resp.Responses = make([]ProduceResponseTopic, numTopics)
+		for i := 0; i < numTopics; i++ {
+			topic := ProduceResponseTopic{}
+			topic.Name = r.ReadCompactString()
+
+			// Partitions
+			numPartsVar, _ := r.ReadVarint()
+			numParts := int(numPartsVar) - 1
+			if numParts > 0 {
+				topic.Partitions = make([]ProduceResponsePartition, numParts)
+				for j := 0; j < numParts; j++ {
+					part := ProduceResponsePartition{}
+					part.Index = r.ReadInt32()
+					part.ErrorCode = r.ReadInt16()
+					part.BaseOffset = r.ReadInt64()
+					part.LogAppendTimeMs = r.ReadInt64()
+					part.LogStartOffset = r.ReadInt64()
+					_, _ = r.ReadVarint() // RecordErrors
+					_, _ = r.ReadVarint() // ErrorMessage
+					_ = r.ReadUint8()  // Tag Buffer
+					topic.Partitions[j] = part
+				}
+			}
+			_ = r.ReadUint8() // Topic Tag
+			resp.Responses[i] = topic
+		}
+	}
+
+	resp.ThrottleTimeMs = r.ReadInt32()
+	_ = r.ReadUint8() // Main Tag Buffer
+
+	return resp
 }
