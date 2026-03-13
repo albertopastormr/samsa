@@ -1,3 +1,4 @@
+#!/bin/sh
 # Server run script
 
 set -e # Exit on failure

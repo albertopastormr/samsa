@@ -1,3 +1,4 @@
+#!/bin/sh
 # Server build script
 
 set -e # Exit on failure
