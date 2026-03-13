@@ -1,34 +1,61 @@
-[![progress-banner](https://backend.codecrafters.io/progress/kafka/a24cb926-eb76-4f48-8f19-de38d3d54275)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
+# Samsa 🪳
 
-This is a starting point for Go solutions to the
-["Build Your Own Kafka" Challenge](https://codecrafters.io/challenges/kafka).
+Samsa (named after Gregor Samsa) is a high-performance Kafka clone written in Go. It implements the Kafka wire protocol from scratch, supporting key features like KRaft-based metadata discovery, topic partitioning, and message persistence.
 
-In this challenge, you'll build a toy Kafka clone that's capable of accepting
-and responding to ApiVersions & Fetch API requests. You'll also learn about
-encoding and decoding messages using the Kafka wire protocol. You'll also learn
-about handling the network protocol, event loops, TCP sockets and more.
+## 🚀 Overview
 
-**Note**: If you're viewing this repo on GitHub, head over to
-[codecrafters.io](https://codecrafters.io) to try the challenge.
+Samsa is designed to be a lightweight but technically accurate implementation of the Kafka protocol. It demonstrates how to handle complex binary protocols, manage on-disk log structures, and build a symmetrical protocol layer that serves both a broker and a native CLI client.
 
-# Passing the first stage
+## 🏗️ Architecture
 
-The entry point for your Kafka implementation is in `app/main.go`. Study and
-uncomment the relevant code, and push your changes to pass the first stage:
+The project follows a clean, decoupled architecture:
 
-```sh
-git commit -am "pass 1st stage" # any msg
-git push origin master
+### 1. Symmetric Protocol Layer (`internal/protocol`)
+Contrary to many implementations, Samsa uses a single source of truth for the Kafka protocol. Any data structure defined here automatically supports:
+- **Server Mode**: Decoding Requests / Encoding Responses.
+- **Client Mode**: Encoding Requests / Decoding Responses.
+- **Shared Primitives**: Custom `Reader` and `Writer` for Kafka's binary types (Compact Strings, Varints, etc.).
+
+### 2. Network Engine (`internal/network`)
+- **Broker**: A high-concurrency TCP server that handles request framing and dispatches to logic handlers.
+- **Client**: A robust TCP dialer that manages the low-level request-response lifecycle.
+
+### 3. Logic & Storage (`internal/handlers` & `internal/metadata`)
+- **Handlers**: Cleanly separated business logic for `Produce`, `Fetch`, `ApiVersions`, and `Metadata`.
+- **Disk Persistence**: Follows Kafka's log segment format (`00000000000000000000.log`).
+- **KRaft Metadata**: Parses `__cluster_metadata` logs for dynamic topic and partition discovery.
+
+## 🛠️ Getting Started
+
+### Prerequisites
+- Go 1.22+
+
+### Installation
+```bash
+git clone https://github.com/albertopastormr/samsa.git
+cd samsa
+go build -o server cmd/server/*.go
+go build -o kcli cmd/client/*.go
 ```
 
-That's all!
+### Running the Broker
+```bash
+./server /path/to/server.properties
+```
 
-# Stage 2 & beyond
+### Using the Client (`kcli`)
+The built-in client allows you to interact with any Kafka-compatible broker:
+```bash
+./kcli apiversions
+./kcli metadata my-topic
+./kcli produce my-topic 0 "Hello, Samsa!"
+```
 
-Note: This section is for stages 2 and beyond.
+## 📜 Supported APIs
+- **Produce** (v11)
+- **Fetch** (v16)
+- **ApiVersions** (v4)
+- **DescribeTopicPartitions** (v0)
 
-1. Ensure you have `go (1.25)` installed locally
-1. Run `./your_program.sh` to run your Kafka broker, which is implemented in
-   `app/main.go`.
-1. Commit your changes and run `git push origin master` to submit your solution
-   to CodeCrafters. Test output will be streamed to your terminal.
+## ⚖️ License
+MIT
