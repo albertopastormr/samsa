@@ -10,4 +10,5 @@ const (
 	ErrUnknownTopicOrPartition = 3
 	ErrUnsupportedVersion      = 35
 	ErrUnknownTopicId          = 100
+	ErrUnknownServerError      = -1
 )

@@ -1,6 +1,11 @@
 package handlers
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/albertopastormr/samsa/internal/config"
 	"github.com/albertopastormr/samsa/internal/metadata"
 	"github.com/albertopastormr/samsa/internal/protocol"
 )
@@ -35,6 +40,30 @@ func HandleProduce(header protocol.RequestHeader, reader *protocol.Reader) (prot
 				for _, mp := range parts {
 					if mp.PartitionId == p.Index {
 						// Valid Topic and Partition
+						// Write records to disk
+						if len(p.Records) > 0 {
+							logDir := filepath.Join(config.LogDirs, fmt.Sprintf("%s-%d", t.Name, p.Index))
+							if err := os.MkdirAll(logDir, 0755); err != nil {
+								fmt.Printf("Error creating log directory: %v\n", err)
+								errCode = protocol.ErrUnknownServerError
+								break
+							}
+							logPath := filepath.Join(logDir, "00000000000000000000.log")
+							f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+							if err != nil {
+								fmt.Printf("Error opening log file: %v\n", err)
+								errCode = protocol.ErrUnknownServerError
+								break
+							}
+							if _, err := f.Write(p.Records); err != nil {
+								fmt.Printf("Error writing to log file: %v\n", err)
+								f.Close()
+								errCode = protocol.ErrUnknownServerError
+								break
+							}
+							f.Close()
+						}
+
 						errCode = protocol.ErrNone
 						logStartOffset = 0
 						baseOffset = 0

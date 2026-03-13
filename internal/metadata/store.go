@@ -81,3 +81,15 @@ func syncIfNecessary() {
 	}
 	globalStore.lastUpdate = time.Now()
 }
+
+func SetMetadataForTest(topics map[string]Topic, partitions map[string][]Partition) {
+	globalStore.mu.Lock()
+	defer globalStore.mu.Unlock()
+	globalStore.topics = topics
+	globalStore.partitions = partitions
+	globalStore.topicsByName = make(map[string]string)
+	for uuid, topic := range topics {
+		globalStore.topicsByName[topic.Name] = uuid
+	}
+	globalStore.lastUpdate = time.Now()
+}
