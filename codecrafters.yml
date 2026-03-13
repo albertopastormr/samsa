@@ -1,0 +1,3 @@
+# Build and runtime settings
+buildpack: go-1.25
+debug: false
