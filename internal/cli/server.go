@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/albertopastormr/samsa/internal/config"
 	"github.com/albertopastormr/samsa/internal/network"
@@ -21,12 +24,21 @@ var serverCmd = &cobra.Command{
 			}
 		}
 
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+
 		srv := network.NewServer("0.0.0.0:9092")
 		fmt.Println("Starting Kafka broker on 0.0.0.0:9092")
-		if err := srv.ListenAndServe(); err != nil {
-			fmt.Printf("Server failed: %v\n", err)
-			os.Exit(1)
-		}
+
+		go func() {
+			if err := srv.ListenAndServe(); err != nil {
+				fmt.Printf("Server failed: %v\n", err)
+				stop() // Signal main thread to exit if server fails
+			}
+		}()
+
+		<-ctx.Done()
+		srv.Shutdown()
 	},
 }
 

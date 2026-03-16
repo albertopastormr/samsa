@@ -23,12 +23,16 @@ type HandlerFunc func(header protocol.RequestHeader, reader *protocol.Reader) (p
 type Server struct {
 	addr     string
 	handlers map[int16]HandlerFunc
+	ln       net.Listener
+	wg       sync.WaitGroup
+	quit     chan struct{}
 }
 
 func NewServer(addr string) *Server {
 	s := &Server{
 		addr:     addr,
 		handlers: make(map[int16]HandlerFunc),
+		quit:     make(chan struct{}),
 	}
 	s.registerHandlers()
 	return s
@@ -46,16 +50,36 @@ func (s *Server) ListenAndServe() error {
 	if err != nil {
 		return fmt.Errorf("failed to bind to %s: %w", s.addr, err)
 	}
+	s.ln = l
 	defer l.Close()
 
 	for {
 		conn, err := l.Accept()
 		if err != nil {
-			fmt.Printf("Error accepting connection: %v\n", err)
-			continue
+			select {
+			case <-s.quit:
+				return nil
+			default:
+				fmt.Printf("Error accepting connection: %v\n", err)
+				continue
+			}
 		}
-		go s.handleConn(conn)
+
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.handleConn(conn)
+		}()
 	}
+}
+
+func (s *Server) Shutdown() {
+	fmt.Println("Shutting down gracefully...")
+	close(s.quit)
+	if s.ln != nil {
+		s.ln.Close()
+	}
+	s.wg.Wait()
 }
 
 func (s *Server) handleConn(conn net.Conn) {
