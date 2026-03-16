@@ -1,61 +1,122 @@
-# Samsa 🪳
+# Samsa
 
-Samsa (named after Gregor Samsa) is a high-performance Kafka clone written in Go. It implements the Kafka wire protocol from scratch, supporting key features like KRaft-based metadata discovery, topic partitioning, and message persistence.
+[![Go Report Card](https://goreportcard.com/badge/github.com/albertopastormr/samsa)](https://goreportcard.com/report/github.com/albertopastormr/samsa)
+[![Build Status](https://github.com/albertopastormr/samsa/actions/workflows/ci.yml/badge.svg)](https://github.com/albertopastormr/samsa/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 🚀 Overview
+**Samsa** is a lightweight, Kafka-compatible message broker and CLI written in Go. It implements the core Kafka binary protocol, providing a high-performance distribution system for event-driven architectures.
 
-Samsa is designed to be a lightweight but technically accurate implementation of the Kafka protocol. It demonstrates how to handle complex binary protocols, manage on-disk log structures, and build a symmetrical protocol layer that serves both a broker and a native CLI client.
+## 🚀 Features
+
+- **Single Binary Architecture**: The `samsa` CLI serves as both the broker (server) and the administrative tool (client).
+- **Kafka Compatibility**: Implements key Kafka APIs including `Produce`, `Fetch`, `ApiVersions`, and `DescribeTopicPartitions`.
+- **Disk Persistence**: High-throughput message logging with persistent storage on disk.
+- **Custom Protocol Engine**: Hand-crafted binary decoding and encoding for maximum efficiency.
+- **Graceful Shutdown**: Robust lifecycle management ensures zero data corruption during server restarts by flushing active writes and completing inflight requests.
+
+## 🛠️ Quick Start
+
+### 1. Build
+Compile the project into a single executable using the provided `Makefile`:
+```bash
+make build
+```
+This creates the `samsa` binary in the `bin/` directory.
+
+### 2. Start the Server
+Run the broker on the default port (`9092`):
+```bash
+./bin/samsa server
+```
+
+### 3. Produce and Consume
+In separate terminals, you can use the built-in client to interact with the broker:
+
+**List Topics:**
+```bash
+./bin/samsa topics
+```
+
+**Produce a Message:**
+```bash
+./bin/samsa produce --topic my-topic --message "Hello Samsa"
+```
+
+**Fetch Messages:**
+*(Note: Use the topic ID returned by the `topics` or `metadata` command)*
+```bash
+./bin/samsa fetch --topic-id <topic-uuid> --partition 0
+```
 
 ## 🏗️ Architecture
 
-The project follows a clean, decoupled architecture:
+Samsa follows a **Hexagonal (Clean) Architecture** to ensure maintainability and testability:
 
-### 1. Symmetric Protocol Layer (`internal/protocol`)
-Contrary to many implementations, Samsa uses a single source of truth for the Kafka protocol. Any data structure defined here automatically supports:
-- **Server Mode**: Decoding Requests / Encoding Responses.
-- **Client Mode**: Encoding Requests / Decoding Responses.
-- **Shared Primitives**: Custom `Reader` and `Writer` for Kafka's binary types (Compact Strings, Varints, etc.).
+- **Network Layer**: Handles TCP connection lifecycles, concurrency, and graceful shutdown via `NotifyContext`.
+- **Protocol Layer**: A dedicated engine for manual bit-flipping and parsing of Kafka's binary wire format.
+- **Handlers**: Decoupled logic for processing Produce, Fetch, and Metadata requests.
+- **Storage Layer**: Manages thread-safe metadata and high-performance append-only logging to disk.
 
-### 2. Network Engine (`internal/network`)
-- **Broker**: A high-concurrency TCP server that handles request framing and dispatches to logic handlers.
-- **Client**: A robust TCP dialer that manages the low-level request-response lifecycle.
+### System Flow Diagram
 
-### 3. Logic & Storage (`internal/handlers` & `internal/metadata`)
-- **Handlers**: Cleanly separated business logic for `Produce`, `Fetch`, `ApiVersions`, and `Metadata`.
-- **Disk Persistence**: Follows Kafka's log segment format (`00000000000000000000.log`).
-- **KRaft Metadata**: Parses `__cluster_metadata` logs for dynamic topic and partition discovery.
+```mermaid
+graph TD
+    Client["Kafka Client / Samsa CLI"]
+    
+    subgraph Samsa ["Samsa Broker (Go Binary)"]
+        direction TB
+        
+        subgraph Network ["Network & Lifecycle"]
+            TCP["TCP Server / Listener"]
+            Graceful["Shutdown Controller"]
+        end
+        
+        subgraph Engine ["Protocol Engine"]
+            Decoder["Binary Decoder"]
+            Encoder["Binary Encoder"]
+        end
+        
+        subgraph Handlers ["API Handlers"]
+            Produce["Produce API"]
+            Fetch["Fetch API"]
+            Meta["Metadata API"]
+        end
+        
+        subgraph Persistence ["Data & Metadata"]
+            Store["Metadata Store"]
+            Logs["Log Segments (*.log)"]
+        end
+        
+        %% Internal Flow
+        TCP --> Decoder
+        Decoder --> Produce
+        Decoder --> Fetch
+        Decoder --> Meta
+        
+        Produce --> Logs
+        Fetch --> Logs
+        Meta --> Store
+        
+        Produce --> Encoder
+        Fetch --> Encoder
+        Meta --> Encoder
+        Encoder --> TCP
+    end
 
-## 🛠️ Getting Started
-
-### Prerequisites
-- Go 1.22+
-
-### Installation
-```bash
-git clone https://github.com/albertopastormr/samsa.git
-cd samsa
-go build -o server cmd/server/*.go
-go build -o kcli cmd/client/*.go
+    Client <--> TCP
 ```
 
-### Running the Broker
+## 🧪 Development
+
+Run the full test suite with race detection:
 ```bash
-./server /path/to/server.properties
+make test
 ```
 
-### Using the Client (`kcli`)
-The built-in client allows you to interact with any Kafka-compatible broker:
+Cleanup build artifacts and logs:
 ```bash
-./kcli apiversions
-./kcli metadata my-topic
-./kcli produce my-topic 0 "Hello, Samsa!"
+make clean
 ```
 
-## 📜 Supported APIs
-- **Produce** (v11)
-- **Fetch** (v16)
-- **ApiVersions** (v4)
-- **DescribeTopicPartitions** (v0)
-
-## ⚖️ License
-MIT
+---
+*Inspired by the Kafka protocol. Built for education and performance.*
