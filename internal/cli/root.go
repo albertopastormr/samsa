@@ -1,11 +1,26 @@
 package cli
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
 )
+
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print the version of Samsa",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Printf("Samsa version: %s, commit: %s, built at: %s\n", version, commit, date)
+	},
+}
 
 func SetupLogger(isServer bool) {
 	var handler slog.Handler
@@ -39,4 +54,5 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&BrokerAddr, "broker", "localhost:9092", "Kafka broker address")
+	rootCmd.AddCommand(versionCmd)
 }

@@ -17,6 +17,8 @@ builds:
     goarch:
       - amd64
       - arm64
+    ldflags:
+      - -s -w -X github.com/albertopastormr/samsa/internal/cli.version={{.Version}} -X github.com/albertopastormr/samsa/internal/cli.commit={{.Commit}} -X github.com/albertopastormr/samsa/internal/cli.date={{.Date}}
     ignore:
       - goos: windows
         goarch: arm64
