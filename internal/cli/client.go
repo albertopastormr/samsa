@@ -2,10 +2,15 @@ package cli
 
 import (
 	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/albertopastormr/samsa/internal/client"
+	"github.com/albertopastormr/samsa/internal/protocol"
 	"github.com/spf13/cobra"
 )
 
@@ -166,22 +171,11 @@ var fetchCmd = &cobra.Command{
 	Use:   "fetch",
 	Short: "Fetch records from a topic partition",
 	Run: func(cmd *cobra.Command, args []string) {
-		if topicID == "" {
-			slog.Warn("topic-id is required")
+		if topic == "" {
+			slog.Warn("topic is required")
 			cmd.Usage()
 			os.Exit(1)
 		}
-
-		tidBytes, err := hex.DecodeString(topicID)
-		if err != nil || len(tidBytes) != 16 {
-			slog.Error("invalid topic ID", 
-				slog.String("topic_id", topicID), 
-				slog.Int("len", len(topicID)), 
-				slog.Any("error", err))
-			os.Exit(1)
-		}
-		var tid [16]byte
-		copy(tid[:], tidBytes)
 
 		kc, err := client.NewKafkaClient(BrokerAddr)
 		if err != nil {
@@ -190,24 +184,145 @@ var fetchCmd = &cobra.Command{
 		}
 		defer kc.Close()
 
+		// 1. Resolve Topic Name to Topic ID
+		meta, err := kc.DescribeTopicPartitions([]string{topic})
+		if err != nil {
+			slog.Error("failed to resolve topic metadata", slog.String("topic", topic), slog.Any("error", err))
+			os.Exit(1)
+		}
+
+		var tid [16]byte
+		found := false
+		for _, t := range meta.Topics {
+			if t.Name == topic && t.ErrorCode == 0 {
+				tid = t.TopicId
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			slog.Error("topic not found or error in metadata", slog.String("topic", topic))
+			os.Exit(1)
+		}
+
+		// 2. Perform Fetch
 		resp, err := kc.Fetch(tid, partition, offset)
 		if err != nil {
 			slog.Error("fetch failed", slog.Any("error", err))
 			os.Exit(1)
 		}
 
-		slog.Info("fetch response", slog.Int("error_code", int(resp.ErrorCode)))
+		slog.Info("fetch completed", slog.Int("error_code", int(resp.ErrorCode)))
 		for _, t := range resp.Topics {
-			slog.Info("fetch topic", slog.String("topic_id", hex.EncodeToString(t.TopicId[:])))
 			for _, p := range t.Partitions {
-				slog.Info("fetch partition", 
-					slog.Int("partition", int(p.PartitionIndex)), 
-					slog.Int("error_code", int(p.ErrorCode)), 
-					slog.Int64("high_watermark", p.HighWatermark))
+				if p.ErrorCode != 0 {
+					slog.Warn("partition error", slog.Int("partition", int(p.PartitionIndex)), slog.Int("error_code", int(p.ErrorCode)))
+					continue
+				}
 				if len(p.Records) > 0 {
-					slog.Info("fetched records", 
-						slog.Int("size_bytes", len(p.Records)), 
-						slog.String("content", string(p.Records)))
+					records, err := protocol.DecodeRecordBatch(p.Records)
+					if err != nil {
+						slog.Error("failed to decode record batch", slog.Any("error", err))
+						continue
+					}
+					for _, r := range records {
+						fmt.Println(r.String())
+					}
+				}
+			}
+		}
+	},
+}
+
+var consumeCmd = &cobra.Command{
+	Use:   "consume",
+	Short: "Consume messages from a topic in real-time",
+	Run: func(cmd *cobra.Command, args []string) {
+		if topic == "" {
+			slog.Warn("topic is required")
+			cmd.Usage()
+			os.Exit(1)
+		}
+
+		kc, err := client.NewKafkaClient(BrokerAddr)
+		if err != nil {
+			slog.Error("failed to connect", slog.Any("error", err))
+			os.Exit(1)
+		}
+		defer kc.Close()
+
+		// 1. Resolve Topic Name to Topic ID
+		meta, err := kc.DescribeTopicPartitions([]string{topic})
+		if err != nil {
+			slog.Error("failed to resolve topic metadata", slog.String("topic", topic), slog.Any("error", err))
+			os.Exit(1)
+		}
+		var tid [16]byte
+		found := false
+		for _, t := range meta.Topics {
+			if t.Name == topic && t.ErrorCode == 0 {
+				tid = t.TopicId
+				found = true
+				break
+			}
+		}
+		if !found {
+			slog.Error("topic not found or error in metadata", slog.String("topic", topic))
+			os.Exit(1)
+		}
+
+		slog.Info("starting consumer", slog.String("topic", topic), slog.String("topic_id", hex.EncodeToString(tid[:])), slog.Int64("offset", offset))
+
+		// 2. Setup Signal Handling for Graceful Exit
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+		currentOffset := offset
+		
+		for {
+			select {
+			case <-sigChan:
+				slog.Info("stopping consumer...")
+				return
+			default:
+				resp, err := kc.Fetch(tid, partition, currentOffset)
+				if err != nil {
+					slog.Error("fetch error", slog.Any("error", err))
+					time.Sleep(1 * time.Second)
+					continue
+				}
+
+				if resp.ErrorCode != 0 {
+					slog.Warn("fetch returned error", slog.Int("error_code", int(resp.ErrorCode)))
+					time.Sleep(1 * time.Second)
+					continue
+				}
+
+				foundNewMessages := false
+				for _, t := range resp.Topics {
+					for _, p := range t.Partitions {
+						if len(p.Records) > 0 {
+							records, err := protocol.DecodeRecordBatch(p.Records)
+							if err != nil {
+								slog.Error("failed to decode record batch", slog.Any("error", err))
+								continue
+							}
+							if len(records) > 0 {
+								foundNewMessages = true
+								for _, r := range records {
+									fmt.Println(r.String())
+									if r.Offset >= currentOffset {
+										currentOffset = r.Offset + 1
+									}
+								}
+							}
+						}
+					}
+				}
+
+				if !foundNewMessages {
+					time.Sleep(500 * time.Millisecond)
 				}
 			}
 		}
@@ -252,13 +367,18 @@ func init() {
 	produceCmd.Flags().Int32Var(&partition, "partition", 0, "Partition index")
 	produceCmd.Flags().StringVar(&message, "message", "", "Message content")
 
-	fetchCmd.Flags().StringVar(&topicID, "topic-id", "", "Topic UUID in hex")
+	fetchCmd.Flags().StringVar(&topic, "topic", "", "Topic name")
 	fetchCmd.Flags().Int32Var(&partition, "partition", 0, "Partition index")
 	fetchCmd.Flags().Int64Var(&offset, "offset", 0, "Fetch offset")
+
+	consumeCmd.Flags().StringVar(&topic, "topic", "", "Topic name")
+	consumeCmd.Flags().Int32Var(&partition, "partition", 0, "Partition index")
+	consumeCmd.Flags().Int64Var(&offset, "offset", 0, "Initial offset")
 
 	rootCmd.AddCommand(apiVersionsCmd)
 	rootCmd.AddCommand(produceCmd)
 	rootCmd.AddCommand(fetchCmd)
+	rootCmd.AddCommand(consumeCmd)
 
 	topicCmd.AddCommand(topicListCmd)
 	topicCmd.AddCommand(topicDescribeCmd)

@@ -59,9 +59,13 @@ In separate terminals, you can use the built-in client to interact with the brok
 ```
 
 **Fetch Messages:**
-*(Note: Use the topic ID returned by the `topic list` or `topic describe` command)*
 ```bash
-./bin/samsa fetch --topic-id <topic-uuid> --partition 0
+./bin/samsa fetch --topic my-topic --partition 0
+```
+
+**Consume Messages (Real-time):**
+```bash
+./bin/samsa consume --topic my-topic --partition 0
 ```
 
 ## 🏗️ Architecture
