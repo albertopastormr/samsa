@@ -72,8 +72,7 @@ func HandleDescribeTopicPartitions(header protocol.RequestHeader, reader *protoc
 		}
 	}
 
-	// Kafka protocol often expects topics to be sorted algorithmically (typically by Topic Name)
-	// when queried. CodeCrafters stage WQ2 explicitly triggers this sorting constraint requirement!
+	// Kafka protocol often expects topics to be sorted by Name when queried.
 	importSort := false
 	if len(topics) > 1 {
 		importSort = true
