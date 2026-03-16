@@ -27,14 +27,26 @@ func GetTopics() map[string]Topic {
 	syncIfNecessary()
 	globalStore.mu.RLock()
 	defer globalStore.mu.RUnlock()
-	return globalStore.topics
+	
+	topicsMap := make(map[string]Topic, len(globalStore.topics))
+	for k, v := range globalStore.topics {
+		topicsMap[k] = v
+	}
+	return topicsMap
 }
 
 func GetPartitions() map[string][]Partition {
 	syncIfNecessary()
 	globalStore.mu.RLock()
 	defer globalStore.mu.RUnlock()
-	return globalStore.partitions
+
+	partitionsMap := make(map[string][]Partition, len(globalStore.partitions))
+	for k, v := range globalStore.partitions {
+		pCopy := make([]Partition, len(v))
+		copy(pCopy, v)
+		partitionsMap[k] = pCopy
+	}
+	return partitionsMap
 }
 
 func GetTopicByName(name string) (Topic, bool) {
@@ -53,9 +65,10 @@ func GetTopicByName(name string) (Topic, bool) {
 func syncIfNecessary() {
 	globalStore.mu.RLock()
 	isFresh := time.Since(globalStore.lastUpdate) < 5*time.Second
+	hasTopics := len(globalStore.topics) > 0
 	globalStore.mu.RUnlock()
 
-	if isFresh && len(globalStore.topics) > 0 {
+	if isFresh && hasTopics {
 		return
 	}
 
