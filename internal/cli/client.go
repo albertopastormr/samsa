@@ -43,12 +43,17 @@ var apiVersionsCmd = &cobra.Command{
 	},
 }
 
-var metadataCmd = &cobra.Command{
-	Use:   "metadata",
+var topicCmd = &cobra.Command{
+	Use:   "topic",
+	Short: "Manage Kafka topics",
+}
+
+var topicDescribeCmd = &cobra.Command{
+	Use:   "describe",
 	Short: "Fetch topic and partition metadata",
 	Run: func(cmd *cobra.Command, args []string) {
 		if topic == "" {
-			slog.Warn("topic is required")
+			slog.Warn("name is required")
 			cmd.Usage()
 			os.Exit(1)
 		}
@@ -166,8 +171,8 @@ var fetchCmd = &cobra.Command{
 	},
 }
 
-var topicsCmd = &cobra.Command{
-	Use:   "topics",
+var topicListCmd = &cobra.Command{
+	Use:   "list",
 	Short: "List all topics",
 	Run: func(cmd *cobra.Command, args []string) {
 		kc, err := client.NewKafkaClient(BrokerAddr)
@@ -195,7 +200,7 @@ var topicsCmd = &cobra.Command{
 }
 
 func init() {
-	metadataCmd.Flags().StringVar(&topic, "topic", "", "Topic name")
+	topicDescribeCmd.Flags().StringVar(&topic, "name", "", "Topic name")
 	
 	produceCmd.Flags().StringVar(&topic, "topic", "", "Topic name")
 	produceCmd.Flags().Int32Var(&partition, "partition", 0, "Partition index")
@@ -206,8 +211,10 @@ func init() {
 	fetchCmd.Flags().Int64Var(&offset, "offset", 0, "Fetch offset")
 
 	rootCmd.AddCommand(apiVersionsCmd)
-	rootCmd.AddCommand(metadataCmd)
 	rootCmd.AddCommand(produceCmd)
 	rootCmd.AddCommand(fetchCmd)
-	rootCmd.AddCommand(topicsCmd)
+
+	topicCmd.AddCommand(topicListCmd)
+	topicCmd.AddCommand(topicDescribeCmd)
+	rootCmd.AddCommand(topicCmd)
 }

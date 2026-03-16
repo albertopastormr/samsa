@@ -40,7 +40,12 @@ In separate terminals, you can use the built-in client to interact with the brok
 
 **List Topics:**
 ```bash
-./bin/samsa topics
+./bin/samsa topic list
+```
+
+**Describe a Topic:**
+```bash
+./bin/samsa topic describe --name my-topic
 ```
 
 **Produce a Message:**
@@ -49,7 +54,7 @@ In separate terminals, you can use the built-in client to interact with the brok
 ```
 
 **Fetch Messages:**
-*(Note: Use the topic ID returned by the `topics` or `metadata` command)*
+*(Note: Use the topic ID returned by the `topic list` or `topic describe` command)*
 ```bash
 ./bin/samsa fetch --topic-id <topic-uuid> --partition 0
 ```
