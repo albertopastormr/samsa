@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"fmt"
+	"log/slog"
 
 	"github.com/albertopastormr/samsa/internal/metadata"
 	"github.com/albertopastormr/samsa/internal/protocol"
@@ -14,7 +14,9 @@ func HandleDescribeTopicPartitions(header protocol.RequestHeader, reader *protoc
 	// Fetch metadata from cached store
 	metadataTopics := metadata.GetTopics()
 	metadataPartitions := metadata.GetPartitions()
-	fmt.Printf("Metadata cache: %d topics, %d partition groups\n", len(metadataTopics), len(metadataPartitions))
+	slog.Debug("metadata cache status", 
+		slog.Int("topics_count", len(metadataTopics)), 
+		slog.Int("partition_groups_count", len(metadataPartitions)))
 
 	requestedTopics := req.Topics
 	if len(requestedTopics) == 0 {

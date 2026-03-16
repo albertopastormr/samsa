@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"sync"
 
@@ -60,7 +61,7 @@ func (s *Server) ListenAndServe() error {
 			case <-s.quit:
 				return nil
 			default:
-				fmt.Printf("Error accepting connection: %v\n", err)
+				slog.Error("error accepting connection", slog.Any("error", err))
 				continue
 			}
 		}
@@ -74,7 +75,7 @@ func (s *Server) ListenAndServe() error {
 }
 
 func (s *Server) Shutdown() {
-	fmt.Println("Shutting down gracefully...")
+	slog.Info("shutting down gracefully")
 	close(s.quit)
 	if s.ln != nil {
 		s.ln.Close()
@@ -90,7 +91,7 @@ func (s *Server) handleConn(conn net.Conn) {
 		sizeBuf := make([]byte, 4)
 		if _, err := io.ReadFull(conn, sizeBuf); err != nil {
 			if err != io.EOF {
-				fmt.Printf("Error reading message size: %v\n", err)
+				slog.Error("error reading message size", slog.Any("error", err))
 			}
 			return
 		}
@@ -99,7 +100,7 @@ func (s *Server) handleConn(conn net.Conn) {
 		// 2. Read the body
 		requestBuf := make([]byte, messageSize)
 		if _, err := io.ReadFull(conn, requestBuf); err != nil {
-			fmt.Printf("Error reading request body: %v\n", err)
+			slog.Error("error reading request body", slog.Any("error", err))
 			return
 		}
 
@@ -110,7 +111,10 @@ func (s *Server) handleConn(conn net.Conn) {
 		// 4. Handle Request
 		encoder, err := s.dispatch(header, reader)
 		if err != nil {
-			fmt.Printf("Error handling request: %v\n", err)
+			slog.Error("error handling request", 
+				slog.Int("api_key", int(header.ApiKey)),
+				slog.Int("correlation_id", int(header.CorrelationID)),
+				slog.Any("error", err))
 			return
 		}
 
@@ -135,6 +139,6 @@ func (s *Server) sendResponse(conn net.Conn, encoder protocol.Encoder, correlati
 	encoder.Encode(writer, correlationID)
 
 	if _, err := conn.Write(writer.Bytes()); err != nil {
-		fmt.Printf("Error writing response: %v\n", err)
+		slog.Error("error writing response", slog.Any("error", err))
 	}
 }

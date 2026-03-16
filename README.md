@@ -14,6 +14,12 @@
 - **Custom Protocol Engine**: Hand-crafted binary decoding and encoding for maximum efficiency.
 - **Graceful Shutdown**: Robust lifecycle management ensures zero data corruption during server restarts by flushing active writes and completing inflight requests.
 
+## 📦 Installation
+
+**Download pre-compiled binaries:**
+You can download the latest version of Samsa for Linux, macOS, or Windows from the [Releases page](https://github.com/albertopastormr/samsa/releases).
+
+
 ## 🛠️ Quick Start
 
 ### 1. Build

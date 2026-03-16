@@ -2,7 +2,7 @@ package cli
 
 import (
 	"encoding/hex"
-	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/albertopastormr/samsa/internal/client"
@@ -23,19 +23,22 @@ var apiVersionsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		kc, err := client.NewKafkaClient(BrokerAddr)
 		if err != nil {
-			fmt.Printf("Failed to connect: %v\n", err)
+			slog.Error("failed to connect", slog.Any("error", err))
 			os.Exit(1)
 		}
 		defer kc.Close()
 
 		resp, err := kc.ApiVersions()
 		if err != nil {
-			fmt.Printf("ApiVersions failed: %v\n", err)
+			slog.Error("apiversions failed", slog.Any("error", err))
 			os.Exit(1)
 		}
-		fmt.Printf("ErrorCode: %d\n", resp.ErrorCode)
+		slog.Info("apiversions response", slog.Int("error_code", int(resp.ErrorCode)))
 		for _, entry := range resp.ApiKeys {
-			fmt.Printf(" API %d: v%d-v%d\n", entry.ApiKey, entry.MinVersion, entry.MaxVersion)
+			slog.Info("supported api", 
+				slog.Int("api_key", int(entry.ApiKey)), 
+				slog.Int("min_version", int(entry.MinVersion)), 
+				slog.Int("max_version", int(entry.MaxVersion)))
 		}
 	},
 }
@@ -45,27 +48,33 @@ var metadataCmd = &cobra.Command{
 	Short: "Fetch topic and partition metadata",
 	Run: func(cmd *cobra.Command, args []string) {
 		if topic == "" {
-			fmt.Println("Error: --topic is required")
+			slog.Warn("topic is required")
 			cmd.Usage()
 			os.Exit(1)
 		}
 
 		kc, err := client.NewKafkaClient(BrokerAddr)
 		if err != nil {
-			fmt.Printf("Failed to connect: %v\n", err)
+			slog.Error("failed to connect", slog.Any("error", err))
 			os.Exit(1)
 		}
 		defer kc.Close()
 
 		resp, err := kc.DescribeTopicPartitions([]string{topic})
 		if err != nil {
-			fmt.Printf("Metadata failed: %v\n", err)
+			slog.Error("metadata failed", slog.Any("error", err))
 			os.Exit(1)
 		}
 		for _, t := range resp.Topics {
-			fmt.Printf("Topic: %s (ID: %x, Error: %d)\n", t.Name, t.TopicId, t.ErrorCode)
+			slog.Info("topic metadata", 
+				slog.String("name", t.Name), 
+				slog.String("id", hex.EncodeToString(t.TopicId[:])), 
+				slog.Int("error_code", int(t.ErrorCode)))
 			for _, p := range t.Partitions {
-				fmt.Printf("  Partition %d: Leader %d, Error %d\n", p.PartitionId, p.Leader, p.ErrorCode)
+				slog.Info("partition metadata", 
+					slog.Int("partition_id", int(p.PartitionId)), 
+					slog.Int("leader", int(p.Leader)), 
+					slog.Int("error_code", int(p.ErrorCode)))
 			}
 		}
 	},
@@ -76,27 +85,30 @@ var produceCmd = &cobra.Command{
 	Short: "Produce a message to a topic",
 	Run: func(cmd *cobra.Command, args []string) {
 		if topic == "" || message == "" {
-			fmt.Println("Error: --topic and --message are required")
+			slog.Warn("topic and message are required")
 			cmd.Usage()
 			os.Exit(1)
 		}
 
 		kc, err := client.NewKafkaClient(BrokerAddr)
 		if err != nil {
-			fmt.Printf("Failed to connect: %v\n", err)
+			slog.Error("failed to connect", slog.Any("error", err))
 			os.Exit(1)
 		}
 		defer kc.Close()
 
 		resp, err := kc.Produce(topic, partition, []byte(message))
 		if err != nil {
-			fmt.Printf("Produce failed: %v\n", err)
+			slog.Error("produce failed", slog.Any("error", err))
 			os.Exit(1)
 		}
 		for _, r := range resp.Responses {
-			fmt.Printf("Topic: %s\n", r.Name)
+			slog.Info("produce topic response", slog.String("topic", r.Name))
 			for _, p := range r.Partitions {
-				fmt.Printf("  Partition %d: Error %d, Offset %d\n", p.Index, p.ErrorCode, p.BaseOffset)
+				slog.Info("produce partition response", 
+					slog.Int("partition", int(p.Index)), 
+					slog.Int("error_code", int(p.ErrorCode)), 
+					slog.Int64("offset", p.BaseOffset))
 			}
 		}
 	},
@@ -107,14 +119,17 @@ var fetchCmd = &cobra.Command{
 	Short: "Fetch records from a topic partition",
 	Run: func(cmd *cobra.Command, args []string) {
 		if topicID == "" {
-			fmt.Println("Error: --topic-id is required (hex format)")
+			slog.Warn("topic-id is required")
 			cmd.Usage()
 			os.Exit(1)
 		}
 
 		tidBytes, err := hex.DecodeString(topicID)
 		if err != nil || len(tidBytes) != 16 {
-			fmt.Printf("Invalid Topic ID: must be 32 hex characters (16 bytes), got %d chars: %v\n", len(topicID), err)
+			slog.Error("invalid topic ID", 
+				slog.String("topic_id", topicID), 
+				slog.Int("len", len(topicID)), 
+				slog.Any("error", err))
 			os.Exit(1)
 		}
 		var tid [16]byte
@@ -122,24 +137,29 @@ var fetchCmd = &cobra.Command{
 
 		kc, err := client.NewKafkaClient(BrokerAddr)
 		if err != nil {
-			fmt.Printf("Failed to connect: %v\n", err)
+			slog.Error("failed to connect", slog.Any("error", err))
 			os.Exit(1)
 		}
 		defer kc.Close()
 
 		resp, err := kc.Fetch(tid, partition, offset)
 		if err != nil {
-			fmt.Printf("Fetch failed: %v\n", err)
+			slog.Error("fetch failed", slog.Any("error", err))
 			os.Exit(1)
 		}
 
-		fmt.Printf("ErrorCode: %d\n", resp.ErrorCode)
+		slog.Info("fetch response", slog.Int("error_code", int(resp.ErrorCode)))
 		for _, t := range resp.Topics {
-			fmt.Printf("Topic ID: %x\n", t.TopicId)
+			slog.Info("fetch topic", slog.String("topic_id", hex.EncodeToString(t.TopicId[:])))
 			for _, p := range t.Partitions {
-				fmt.Printf("  Partition %d: Error %d, HighWatermark %d\n", p.PartitionIndex, p.ErrorCode, p.HighWatermark)
+				slog.Info("fetch partition", 
+					slog.Int("partition", int(p.PartitionIndex)), 
+					slog.Int("error_code", int(p.ErrorCode)), 
+					slog.Int64("high_watermark", p.HighWatermark))
 				if len(p.Records) > 0 {
-					fmt.Printf("    Records (%d bytes): %s\n", len(p.Records), string(p.Records))
+					slog.Info("fetched records", 
+						slog.Int("size_bytes", len(p.Records)), 
+						slog.String("content", string(p.Records)))
 				}
 			}
 		}
@@ -152,21 +172,23 @@ var topicsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		kc, err := client.NewKafkaClient(BrokerAddr)
 		if err != nil {
-			fmt.Printf("Failed to connect: %v\n", err)
+			slog.Error("failed to connect", slog.Any("error", err))
 			os.Exit(1)
 		}
 		defer kc.Close()
 
 		resp, err := kc.DescribeTopicPartitions(nil) // Empty list means "all" in our refactored handler
 		if err != nil {
-			fmt.Printf("Topic listing failed: %v\n", err)
+			slog.Error("topic listing failed", slog.Any("error", err))
 			os.Exit(1)
 		}
 
-		fmt.Printf("%-20s %-32s %-10s\n", "NAME", "ID", "PARTITIONS")
 		for _, t := range resp.Topics {
 			if t.ErrorCode == 0 {
-				fmt.Printf("%-20s %x %-10d\n", t.Name, t.TopicId, len(t.Partitions))
+				slog.Info("topic", 
+					slog.String("name", t.Name), 
+					slog.String("id", hex.EncodeToString(t.TopicId[:])), 
+					slog.Int("partitions", len(t.Partitions)))
 			}
 		}
 	},

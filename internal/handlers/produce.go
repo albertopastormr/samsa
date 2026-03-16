@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -29,6 +30,9 @@ func HandleProduce(header protocol.RequestHeader, reader *protocol.Reader) (prot
 
 		// Validate topic existence
 		topic, topicExists := metadata.GetTopicByName(t.Name)
+		if !topicExists {
+			slog.Warn("produce error: topic not found", slog.String("topic", t.Name))
+		}
 
 		for j, p := range t.Partitions {
 			var errCode int16 = protocol.ErrUnknownTopicOrPartition
@@ -37,26 +41,28 @@ func HandleProduce(header protocol.RequestHeader, reader *protocol.Reader) (prot
 			if topicExists {
 				// Validate partition existence
 				parts := metadataPartitions[string(topic.TopicId[:])]
+				foundPartition := false
 				for _, mp := range parts {
 					if mp.PartitionId == p.Index {
+						foundPartition = true
 						// Valid Topic and Partition
 						// Write records to disk
 						if len(p.Records) > 0 {
 							logDir := filepath.Join(config.LogDirs, fmt.Sprintf("%s-%d", t.Name, p.Index))
 							if err := os.MkdirAll(logDir, 0755); err != nil {
-								fmt.Printf("Error creating log directory: %v\n", err)
+								slog.Error("error creating log directory", slog.String("dir", logDir), slog.Any("error", err))
 								errCode = protocol.ErrUnknownServerError
 								break
 							}
 							logPath := filepath.Join(logDir, "00000000000000000000.log")
 							f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 							if err != nil {
-								fmt.Printf("Error opening log file: %v\n", err)
+								slog.Error("error opening log file", slog.String("path", logPath), slog.Any("error", err))
 								errCode = protocol.ErrUnknownServerError
 								break
 							}
 							if _, err := f.Write(p.Records); err != nil {
-								fmt.Printf("Error writing to log file: %v\n", err)
+								slog.Error("error writing to log file", slog.String("path", logPath), slog.Any("error", err))
 								f.Close()
 								errCode = protocol.ErrUnknownServerError
 								break
@@ -70,6 +76,9 @@ func HandleProduce(header protocol.RequestHeader, reader *protocol.Reader) (prot
 						logAppendTimeMs = -1
 						break
 					}
+				}
+				if !foundPartition {
+					slog.Warn("produce error: partition not found", slog.String("topic", t.Name), slog.Int("partition", int(p.Index)))
 				}
 			}
 

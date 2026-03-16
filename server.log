@@ -1,0 +1,3 @@
+Starting Kafka broker on 0.0.0.0:9092
+Server failed: failed to bind to 0.0.0.0:9092: listen tcp 0.0.0.0:9092: bind: address already in use
+Shutting down gracefully...

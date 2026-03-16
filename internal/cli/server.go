@@ -2,7 +2,7 @@ package cli
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -16,11 +16,14 @@ var serverCmd = &cobra.Command{
 	Use:   "server [config-file]",
 	Short: "Start the Samsa Kafka broker",
 	Args:  cobra.MaximumNArgs(1),
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		SetupLogger(true)
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) > 0 {
 			err := config.Load(args[0])
 			if err != nil {
-				fmt.Printf("Failed to load config: %v\n", err)
+				slog.Error("failed to load config", slog.String("file", args[0]), slog.Any("error", err))
 			}
 		}
 
@@ -28,11 +31,11 @@ var serverCmd = &cobra.Command{
 		defer stop()
 
 		srv := network.NewServer("0.0.0.0:9092")
-		fmt.Println("Starting Kafka broker on 0.0.0.0:9092")
+		slog.Info("starting Kafka broker", slog.String("addr", "0.0.0.0:9092"))
 
 		go func() {
 			if err := srv.ListenAndServe(); err != nil {
-				fmt.Printf("Server failed: %v\n", err)
+				slog.Error("server failed", slog.Any("error", err))
 				stop() // Signal main thread to exit if server fails
 			}
 		}()

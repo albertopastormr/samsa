@@ -2,8 +2,8 @@ package metadata
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io"
+	"log/slog"
 	"os"
 )
 
@@ -202,24 +202,27 @@ func ReadClusterMetadata(filepath string) (map[string]Topic, map[string][]Partit
 				recordVersion, n2 := binary.Uvarint(valBytes[offset:])
 				offset += n2
 
-				fmt.Printf("Parsed Record: FrameVersion=%d, Type=%d, Version=%d\n", frameVersion, recordType, recordVersion)
+				slog.Debug("parsed metadata record", 
+					slog.Int("frame_version", int(frameVersion)), 
+					slog.Uint64("record_type", recordType), 
+					slog.Uint64("record_version", recordVersion))
 
 				if frameVersion == 0 || frameVersion == 1 {
 					switch recordType {
 					case 2: // TopicRecord
-						fmt.Printf("Parsing TopicRecord\n")
+						slog.Info("parsing topic record")
 						t := parseTopicRecord(valBytes[offset:], int(recordVersion))
 						topics[string(t.TopicId[:])] = t
 					case 3: // PartitionRecord
-						fmt.Printf("Parsing PartitionRecord\n")
+						slog.Info("parsing partition record")
 						p := parsePartitionRecord(valBytes[offset:], int(recordVersion))
 						partitions[string(p.TopicId[:])] = append(partitions[string(p.TopicId[:])], p)
 					case 12: // FeatureLevel
-						fmt.Printf("Parsing FeatureLevel\n")
+						slog.Debug("parsing feature level record")
 					}
 				}
 			} else {
-				fmt.Printf("valLen was %d\n", valLen)
+				slog.Debug("record value was empty", slog.Int64("val_len", valLen))
 			}
 
 			// skip headers? We have to fully jump by recLen anyway.

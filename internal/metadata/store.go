@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -69,7 +70,7 @@ func syncIfNecessary() {
 	logPath := fmt.Sprintf("%s/__cluster_metadata-0/00000000000000000000.log", config.LogDirs)
 	topics, partitions, err := ReadClusterMetadata(logPath)
 	if err != nil {
-		fmt.Printf("metadata sync error: %v\n", err)
+		slog.Error("metadata sync error", slog.Any("error", err))
 		return
 	}
 
