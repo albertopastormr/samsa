@@ -43,6 +43,11 @@ In separate terminals, you can use the built-in client to interact with the brok
 ./bin/samsa topic list
 ```
 
+**Create a Topic:**
+```bash
+./bin/samsa topic create --name my-topic --partitions 3
+```
+
 **Describe a Topic:**
 ```bash
 ./bin/samsa topic describe --name my-topic

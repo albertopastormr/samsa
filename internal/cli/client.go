@@ -15,6 +15,7 @@ var (
 	partition int32
 	offset    int64
 	message   string
+	numPartitions int32
 )
 
 var apiVersionsCmd = &cobra.Command{
@@ -80,6 +81,48 @@ var topicDescribeCmd = &cobra.Command{
 					slog.Int("partition_id", int(p.PartitionId)), 
 					slog.Int("leader", int(p.Leader)), 
 					slog.Int("error_code", int(p.ErrorCode)))
+			}
+		}
+	},
+}
+
+var topicCreateCmd = &cobra.Command{
+	Use:   "create",
+	Short: "Create a new Kafka topic",
+	Run: func(cmd *cobra.Command, args []string) {
+		if topic == "" {
+			slog.Warn("name is required")
+			cmd.Usage()
+			os.Exit(1)
+		}
+
+		kc, err := client.NewKafkaClient(BrokerAddr)
+		if err != nil {
+			slog.Error("failed to connect", slog.Any("error", err))
+			os.Exit(1)
+		}
+		defer kc.Close()
+
+		resp, err := kc.CreateTopic(topic, numPartitions)
+		if err != nil {
+			slog.Error("topic creation failed", slog.Any("error", err))
+			os.Exit(1)
+		}
+
+		for _, t := range resp.Topics {
+			if t.ErrorCode == 0 {
+				slog.Info("topic created successfully", 
+					slog.String("name", t.Name), 
+					slog.Int("partitions", int(t.NumPartitions)))
+			} else {
+				errMsg := "unknown error"
+				if t.ErrorMessage != nil {
+					errMsg = *t.ErrorMessage
+				}
+				slog.Error("failed to create topic", 
+					slog.String("name", t.Name), 
+					slog.Int("error_code", int(t.ErrorCode)),
+					slog.String("error_message", errMsg))
 			}
 		}
 	},
@@ -202,6 +245,9 @@ var topicListCmd = &cobra.Command{
 func init() {
 	topicDescribeCmd.Flags().StringVar(&topic, "name", "", "Topic name")
 	
+	topicCreateCmd.Flags().StringVar(&topic, "name", "", "Topic name")
+	topicCreateCmd.Flags().Int32Var(&numPartitions, "partitions", 1, "Number of partitions")
+
 	produceCmd.Flags().StringVar(&topic, "topic", "", "Topic name")
 	produceCmd.Flags().Int32Var(&partition, "partition", 0, "Partition index")
 	produceCmd.Flags().StringVar(&message, "message", "", "Message content")
@@ -216,5 +262,6 @@ func init() {
 
 	topicCmd.AddCommand(topicListCmd)
 	topicCmd.AddCommand(topicDescribeCmd)
+	topicCmd.AddCommand(topicCreateCmd)
 	rootCmd.AddCommand(topicCmd)
 }

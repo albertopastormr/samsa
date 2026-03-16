@@ -44,6 +44,7 @@ func (s *Server) registerHandlers() {
 	s.handlers[protocol.ApiKeyDescribeTopicPartitions] = handlers.HandleDescribeTopicPartitions
 	s.handlers[protocol.ApiKeyFetch] = handlers.HandleFetch
 	s.handlers[protocol.ApiKeyProduce] = handlers.HandleProduce
+	s.handlers[protocol.ApiKeyCreateTopics] = handlers.HandleCreateTopics
 }
 
 func (s *Server) ListenAndServe() error {

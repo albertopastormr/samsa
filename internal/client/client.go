@@ -136,3 +136,30 @@ func (c *KafkaClient) Fetch(topicID [16]byte, partition int32, offset int64) (*p
 	resp := protocol.DecodeFetchResponse(reader)
 	return &resp, nil
 }
+
+func (c *KafkaClient) CreateTopic(name string, partitions int32) (*protocol.CreateTopicsResponse, error) {
+	cid := c.nextCorrelationID()
+	req := &protocol.CreateTopicsRequest{
+		Topics: []protocol.CreateTopicsRequestTopic{
+			{
+				Name:              name,
+				NumPartitions:     partitions,
+				ReplicationFactor: 1,
+			},
+		},
+		TimeoutMs: 1000,
+	}
+
+	err := c.networkClient.SendRequest(protocol.ApiKeyCreateTopics, 7, cid, nil, req)
+	if err != nil {
+		return nil, err
+	}
+
+	reader, err := c.networkClient.ReceiveResponse()
+	if err != nil {
+		return nil, err
+	}
+
+	resp := protocol.DecodeCreateTopicsResponse(reader)
+	return &resp, nil
+}

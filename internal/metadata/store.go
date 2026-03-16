@@ -94,3 +94,26 @@ func SetMetadataForTest(topics map[string]Topic, partitions map[string][]Partiti
 	}
 	globalStore.lastUpdate = time.Now()
 }
+
+func AddTopic(name string, numPartitions int32, topicID [16]byte) {
+	globalStore.mu.Lock()
+	defer globalStore.mu.Unlock()
+
+	uuid := string(topicID[:])
+	globalStore.topics[uuid] = Topic{Name: name, TopicId: topicID}
+	globalStore.topicsByName[name] = uuid
+
+	parts := make([]Partition, numPartitions)
+	for i := 0; i < int(numPartitions); i++ {
+		parts[i] = Partition{
+			PartitionId: int32(i),
+			TopicId:     topicID,
+			Leader:      1,
+			LeaderEpoch: 1,
+			Replicas:    []int32{1},
+			Isr:         []int32{1},
+		}
+	}
+	globalStore.partitions[uuid] = parts
+	globalStore.lastUpdate = time.Now()
+}
