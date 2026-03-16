@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/albertopastormr/samsa/internal/config"
 	"github.com/albertopastormr/samsa/internal/metadata"
@@ -37,18 +38,18 @@ func HandleFetch(header protocol.RequestHeader, reader *protocol.Reader) (protoc
 			var records []byte
 			if exists {
 				records = func() []byte {
-					logPath := fmt.Sprintf("%s/%s-%d/00000000000000000000.log", config.LogDirs, topicMetadata.Name, p.Partition)
+					logPath := filepath.Join(config.LogDirs, fmt.Sprintf("%s-%d", topicMetadata.Name, p.Partition), config.DefaultLogSegment)
 					f, err := os.Open(logPath)
 					if err != nil {
 						return nil
 					}
 					defer f.Close()
-					
+
 					readSize := p.PartitionMaxBytes
 					if readSize <= 0 {
 						readSize = 1024 * 1024 // 1MB default
 					}
-					
+
 					buf := make([]byte, readSize)
 					n, _ := f.ReadAt(buf, p.FetchOffset)
 					if n > 0 {

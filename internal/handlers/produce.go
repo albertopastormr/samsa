@@ -54,7 +54,7 @@ func HandleProduce(header protocol.RequestHeader, reader *protocol.Reader) (prot
 								errCode = protocol.ErrUnknownServerError
 								break
 							}
-							logPath := filepath.Join(logDir, "00000000000000000000.log")
+							logPath := filepath.Join(logDir, config.DefaultLogSegment)
 							f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 							if err != nil {
 								slog.Error("error opening log file", slog.String("path", logPath), slog.Any("error", err))

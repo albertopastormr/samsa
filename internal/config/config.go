@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+const DefaultLogSegment = "00000000000000000000.log"
+
 var LogDirs string = "/tmp/kraft-combined-logs"
 
 func Load(filepath string) error {

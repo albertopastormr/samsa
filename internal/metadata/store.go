@@ -1,8 +1,8 @@
 package metadata
 
 import (
-	"fmt"
 	"log/slog"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -80,7 +80,7 @@ func syncIfNecessary() {
 		return
 	}
 
-	logPath := fmt.Sprintf("%s/__cluster_metadata-0/00000000000000000000.log", config.LogDirs)
+	logPath := filepath.Join(config.LogDirs, "__cluster_metadata-0", config.DefaultLogSegment)
 	topics, partitions, err := ReadClusterMetadata(logPath)
 	if err != nil {
 		slog.Error("metadata sync error", slog.Any("error", err))
