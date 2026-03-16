@@ -36,12 +36,26 @@ func HandleFetch(header protocol.RequestHeader, reader *protocol.Reader) (protoc
 		for j, p := range t.Partitions {
 			var records []byte
 			if exists {
-				// Path: <log_dir>/<topic_name>-<partition_index>/00000000000000000000.log
-				logPath := fmt.Sprintf("%s/%s-%d/00000000000000000000.log", config.LogDirs, topicMetadata.Name, p.Partition)
-				fileBytes, err := os.ReadFile(logPath)
-				if err == nil {
-					records = fileBytes
-				}
+				records = func() []byte {
+					logPath := fmt.Sprintf("%s/%s-%d/00000000000000000000.log", config.LogDirs, topicMetadata.Name, p.Partition)
+					f, err := os.Open(logPath)
+					if err != nil {
+						return nil
+					}
+					defer f.Close()
+					
+					readSize := p.PartitionMaxBytes
+					if readSize <= 0 {
+						readSize = 1024 * 1024 // 1MB default
+					}
+					
+					buf := make([]byte, readSize)
+					n, _ := f.ReadAt(buf, p.FetchOffset)
+					if n > 0 {
+						return buf[:n]
+					}
+					return nil
+				}()
 			}
 
 			resp.Topics[i].Partitions[j] = protocol.FetchResponsePartition{

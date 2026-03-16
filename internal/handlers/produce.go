@@ -67,6 +67,9 @@ func HandleProduce(header protocol.RequestHeader, reader *protocol.Reader) (prot
 								errCode = protocol.ErrUnknownServerError
 								break
 							}
+							if err := f.Sync(); err != nil {
+								slog.Error("error syncing log file", slog.String("path", logPath), slog.Any("error", err))
+							}
 							f.Close()
 						}
 
